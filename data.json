@@ -1,0 +1,18 @@
+{
+  "users": {},
+  "tasks": [
+    { "id": "t1", "name": "Gym / Ejercicio", "points": 2 },
+    { "id": "t2", "name": "Tomar agua 2L", "points": 2 },
+    { "id": "t3", "name": "Off line 30min", "points": 1 },
+    { "id": "t4", "name": "Leer 5 paginas", "points": 1 },
+    { "id": "t5", "name": "Ropa preparada", "points": 1 }
+  ],
+  "rewards": [
+    { "id": "r1", "name": "Elegir película del finde", "cost": 10 },
+    { "id": "r2", "name": "Salida por café o postre", "cost": 25 },
+    { "id": "r3", "name": "Pase libre de una tarea doméstica", "cost": 40 }
+  ],
+  "task_logs": [],
+  "redemptions": [],
+  "cheats": []
+}

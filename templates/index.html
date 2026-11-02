@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Disciplina-Inador</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Disciplina-Inador">
+  <link rel="apple-touch-icon" href="/static/icon.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes floatUp {
+      0% { opacity: 0; transform: scale(0.3) translateY(30px); }
+      30% { opacity: 1; transform: scale(1.15) translateY(-10px); }
+      70% { opacity: 1; transform: scale(1.0) translateY(-30px); }
+      100% { opacity: 0; transform: scale(0.9) translateY(-70px); }
+    }
+    .animate-flame-pop {
+      animation: floatUp 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes floatGoldCenter {
+      0% { opacity: 0; transform: scale(0.2) translateY(40px); }
+      30% { opacity: 1; transform: scale(1.3) translateY(-15px); }
+      70% { opacity: 1; transform: scale(1.1) translateY(-40px); }
+      100% { opacity: 0; transform: scale(1.0) translateY(-80px); }
+    }
+    .animate-gold-center {
+      animation: floatGoldCenter 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+<body class="bg-[#F8FAFC] text-slate-800 flex flex-col h-screen font-sans select-none overflow-hidden">
+
+  <!-- OVERLAY DE ANIMACIÓN DE FLAMAS -->
+  <div id="flameOverlay" class="fixed inset-0 pointer-events-none z-50 flex items-center justify-center hidden">
+    <div id="flameContainer" class="relative flex items-center justify-center"></div>
+  </div>
+
+  <!-- SVG DE SILUETA TIPO WHATSAPP -->
+  <svg class="hidden">
+    <g id="icon-default-avatar">
+      <circle cx="50" cy="50" r="50" fill="#E2E8F0"/>
+      <circle cx="50" cy="38" r="18" fill="#94A3B8"/>
+      <path d="M18 86c0-17 14-31 32-31s32 14 32 31c0 1-1 3-2 3H20c-1 0-2-2-2-3z" fill="#94A3B8"/>
+    </g>
+  </svg>
+
+  <!-- PANTALLA LOGIN / REGISTRO -->
+  <div id="authScreen" class="fixed inset-0 bg-[#F1F5F9]/95 backdrop-blur-sm flex flex-col justify-center px-6 z-50">
+    <div class="bg-white p-7 rounded-3xl border border-slate-200/80 max-w-sm w-full mx-auto shadow-xl max-h-[95vh] overflow-y-auto">
+      <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-3 text-xl font-bold">🌱</div>
+      <h1 class="text-2xl font-black text-center text-slate-800 tracking-tight">DISCIPLINA-INADOR</h1>
+      <p class="text-center text-xs text-slate-400 mb-5 font-medium" id="authSubtitle">Inicia sesión en tu cuenta</p>
+
+      <div class="space-y-3.5">
+        <div id="regAvatarContainer" class="flex flex-col items-center hidden mb-2">
+          <div class="relative">
+            <div id="regAvatarPreview" class="w-20 h-20 rounded-full overflow-hidden border-2 border-emerald-400 shadow-sm flex items-center justify-center bg-slate-100">
+              <svg viewBox="0 0 100 100" class="w-full h-full"><use href="#icon-default-avatar"></use></svg>
+            </div>
+            <label for="regAvatarInput" class="absolute bottom-0 right-0 bg-emerald-500 text-white p-2 rounded-full cursor-pointer shadow-md hover:bg-emerald-600 transition-all text-xs">📷</label>
+            <input type="file" id="regAvatarInput" accept="image/*" class="hidden" onchange="previewRegAvatar(event)">
+          </div>
+          <span class="text-[11px] text-slate-400 mt-1">Foto de perfil (opcional)</span>
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Usuario</label>
+          <input type="text" id="authUsername" placeholder="Ingresa tu usuario" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 mt-1">
+        </div>
+
+        <div id="registerFields" class="space-y-3.5 hidden">
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Apodo</label>
+            <input type="text" id="regNickname" placeholder="Cómo te verán en la app" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 mt-1">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Meta Semanal</label>
+            <input type="number" id="regTarget" value="15" placeholder="Meta en puntos" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 mt-1">
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Contraseña</label>
+          <input type="password" id="authPassword" placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 mt-1">
+        </div>
+
+        <div id="authError" class="text-xs text-rose-500 font-semibold text-center hidden"></div>
+
+        <button onclick="handleAuthSubmit()" id="authSubmitBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 py-3 rounded-xl font-bold text-white text-sm shadow-md shadow-emerald-200 transition-all mt-2">
+          Entrar
+        </button>
+
+        <button onclick="toggleAuthMode()" id="authToggleBtn" class="w-full text-xs text-slate-400 hover:text-slate-600 font-medium pt-2">
+          ¿No tienes cuenta? Regístrate aquí
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE PERFIL -->
+  <div id="profileModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-base font-extrabold text-slate-800">Mi Perfil</h3>
+        <button onclick="toggleProfileModal(false)" class="text-slate-400 hover:text-slate-600 text-xl font-bold leading-none">✕</button>
+      </div>
+
+      <div class="flex flex-col items-center mb-5">
+        <div class="relative">
+          <div id="modalAvatarBox" class="w-24 h-24 rounded-full overflow-hidden border-2 border-emerald-400 shadow-md flex items-center justify-center bg-slate-100"></div>
+          <label for="avatarInput" class="absolute bottom-0 right-0 bg-emerald-500 text-white p-2.5 rounded-full cursor-pointer shadow-lg hover:bg-emerald-600 transition-all text-xs">📷</label>
+          <input type="file" id="avatarInput" accept="image/*" class="hidden" onchange="previewAvatar(event)">
+        </div>
+        <span class="text-[11px] text-slate-400 mt-2">Toca la cámara para cambiar foto</span>
+      </div>
+
+      <div class="space-y-3.5">
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Nombre Visible / Apodo</label>
+          <input type="text" id="editName" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Nombre de Usuario</label>
+          <input type="text" id="editUsername" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Nueva Contraseña (opcional)</label>
+          <input type="password" id="editPassword" placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+        </div>
+
+        <div id="profileMsg" class="text-xs font-semibold text-center hidden"></div>
+
+        <button onclick="saveProfile()" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 py-3 rounded-xl font-bold text-white text-sm shadow-md shadow-emerald-200 transition-all">Guardar Cambios</button>
+        <button onclick="logout()" class="w-full bg-rose-50 text-rose-500 hover:bg-rose-100 py-2.5 rounded-xl text-xs font-bold transition-all mt-2">Cerrar Sesión</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header class="p-4 bg-white border-b border-slate-100 flex justify-between items-center shadow-sm">
+    <div onclick="toggleProfileModal(true)" class="flex items-center space-x-3 cursor-pointer group active:opacity-75 transition-opacity">
+      <div id="headerAvatarBox" class="w-10 h-10 rounded-full overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center bg-slate-100"></div>
+      <div>
+        <div class="flex items-center space-x-1">
+          <span class="text-[10px] text-emerald-600 font-extrabold tracking-widest uppercase">Disciplina-Inador</span>
+          <span class="text-[10px] text-slate-400">▾</span>
+        </div>
+        <span id="userNameDisplay" class="font-bold text-slate-800 text-sm block">---</span>
+      </div>
+    </div>
+    <div class="text-right">
+      <span class="text-[10px] text-slate-400 block font-medium">Disponibles</span>
+      <span id="userBalance" class="text-lg font-black text-emerald-500">0 pts</span>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR PRINCIPAL -->
+  <main class="flex-1 overflow-y-auto p-4 space-y-4" id="contentArea"></main>
+
+  <!-- NAVEGACIÓN INFERIOR -->
+  <nav class="h-16 bg-white border-t border-slate-100 flex justify-around items-center text-xs font-semibold shadow-lg">
+    <button onclick="setTab('tasks')" class="tab-btn flex flex-col items-center text-emerald-500 py-1" id="tab-tasks">
+      <span class="text-lg">✓</span><span>Metas</span>
+    </button>
+    <button onclick="setTab('leaderboard')" class="tab-btn flex flex-col items-center text-slate-400 py-1" id="tab-leaderboard">
+      <span class="text-lg">🏆</span><span>Ranking</span>
+    </button>
+    <button onclick="setTab('rewards')" class="tab-btn flex flex-col items-center text-slate-400 py-1" id="tab-rewards">
+      <span class="text-lg">🎁</span><span>Premios</span>
+    </button>
+  </nav>
+
+  <script>
+    let isRegisterMode = false;
+    let currentUser = localStorage.getItem('inador_user');
+    let currentTab = 'tasks';
+    let calendarView = 'month';
+    let globalData = null;
+
+    // --- SINTETIZADOR DE CAMPANITAS CON WEB AUDIO API ---
+    let audioCtx = null;
+    function playChimeSound() {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+
+        const now = audioCtx.currentTime;
+        // Acorde armónico de campanitas (Mi, Sol#, Si, Mi agudo)
+        const notes = [659.25, 830.61, 987.77, 1318.51];
+
+        notes.forEach((freq, idx) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+
+          // Envolvente de volumen (campana: ataque rápido y caída suave)
+          gain.gain.setValueAtTime(0, now + idx * 0.08);
+          gain.gain.linearRampToValueAtTime(0.18, now + idx * 0.08 + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.08 + 1.2);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.start(now + idx * 0.08);
+          osc.stop(now + idx * 0.08 + 1.25);
+        });
+      } catch (e) {
+        console.error('AudioContext error:', e);
+      }
+    }
+
+    function getAvatarHTML(url, sizeClass = "w-full h-full") {
+      if (url && url.trim() !== '') {
+        return `<img src="${url}" class="${sizeClass} object-cover" alt="Avatar">`;
+      }
+      return `<svg viewBox="0 0 100 100" class="${sizeClass}"><use href="#icon-default-avatar"></use></svg>`;
+    }
+
+    function getFlameImage(type) {
+      if (type === 'dorada') return '/static/dorada.png';
+      if (type === 'morada') return '/static/morada.png';
+      if (type === 'azul') return '/static/azul.png';
+      return '/static/naranja.png';
+    }
+
+    // ANIMACIÓN FLOTANTE TIPO INSTAGRAM + SONIDO DE CAMPANITAS
+    function triggerFlamePop(type) {
+      playChimeSound();
+
+      const overlay = document.getElementById('flameOverlay');
+      const container = document.getElementById('flameContainer');
+      container.innerHTML = '';
+
+      if (type === 'dorada') {
+        container.innerHTML = `
+          <img src="/static/dorada.png" class="w-16 h-16 absolute -left-12 -bottom-2 opacity-80 animate-flame-pop" style="animation-delay: 0.1s;">
+          <img src="/static/dorada.png" class="w-32 h-32 animate-gold-center filter drop-shadow-[0_0_20px_rgba(250,204,21,0.6)]">
+          <img src="/static/dorada.png" class="w-16 h-16 absolute -right-12 -bottom-2 opacity-80 animate-flame-pop" style="animation-delay: 0.15s;">
+        `;
+      } else {
+        const src = getFlameImage(type);
+        container.innerHTML = `
+          <img src="${src}" class="w-24 h-24 animate-flame-pop filter drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+        `;
+      }
+
+      overlay.classList.remove('hidden');
+      setTimeout(() => {
+        overlay.classList.add('hidden');
+        container.innerHTML = '';
+      }, 1500);
+    }
+
+    function toggleAuthMode() {
+      isRegisterMode = !isRegisterMode;
+      document.getElementById('registerFields').classList.toggle('hidden', !isRegisterMode);
+      document.getElementById('regAvatarContainer').classList.toggle('hidden', !isRegisterMode);
+      document.getElementById('authSubtitle').textContent = isRegisterMode ? 'Crea tu cuenta para comenzar' : 'Inicia sesión en tu cuenta';
+      document.getElementById('authSubmitBtn').textContent = isRegisterMode ? 'Crear Cuenta' : 'Entrar';
+      document.getElementById('authToggleBtn').textContent = isRegisterMode ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate aquí';
+      document.getElementById('authError').classList.add('hidden');
+    }
+
+    function previewRegAvatar(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          document.getElementById('regAvatarPreview').innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    async function handleAuthSubmit() {
+      const username = document.getElementById('authUsername').value.trim();
+      const password = document.getElementById('authPassword').value.trim();
+      const errBox = document.getElementById('authError');
+      errBox.classList.add('hidden');
+
+      if (!username || !password) {
+        errBox.textContent = 'Por favor completa los campos obligatorios';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      let res;
+      if (isRegisterMode) {
+        const nickname = document.getElementById('regNickname').value.trim();
+        const target = document.getElementById('regTarget').value.trim();
+        const avatarFile = document.getElementById('regAvatarInput').files[0];
+
+        if (!nickname) {
+          errBox.textContent = 'Por favor escribe tu apodo';
+          errBox.classList.remove('hidden');
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('username', username);
+        formData.append('nickname', nickname);
+        formData.append('password', password);
+        formData.append('target', target);
+        if (avatarFile) formData.append('avatar', avatarFile);
+
+        res = await fetch('/api/register', { method: 'POST', body: formData });
+      } else {
+        res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+      }
+
+      const data = await res.json();
+      if (!res.ok) {
+        errBox.textContent = data.error || 'Error al autenticar';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      currentUser = data.user_id;
+      localStorage.setItem('inador_user', currentUser);
+      document.getElementById('authScreen').classList.add('hidden');
+      loadState();
+    }
+
+    function logout() {
+      localStorage.removeItem('inador_user');
+      currentUser = null;
+      toggleProfileModal(false);
+      document.getElementById('authScreen').classList.remove('hidden');
+    }
+
+    function toggleProfileModal(show) {
+      const modal = document.getElementById('profileModal');
+      if (show) {
+        document.getElementById('editName').value = globalData.user.name;
+        document.getElementById('editUsername').value = globalData.user.username;
+        document.getElementById('editPassword').value = '';
+        document.getElementById('modalAvatarBox').innerHTML = getAvatarHTML(globalData.user.avatar);
+        document.getElementById('profileMsg').classList.add('hidden');
+        modal.classList.remove('hidden');
+      } else {
+        modal.classList.add('hidden');
+      }
+    }
+
+    async function loadState() {
+      if (!currentUser) {
+        document.getElementById('authScreen').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('authScreen').classList.add('hidden');
+
+      const res = await fetch(`/api/state?user=${encodeURIComponent(currentUser)}`);
+      if (!res.ok) {
+        logout();
+        return;
+      }
+      globalData = await res.json();
+      document.getElementById('userNameDisplay').textContent = globalData.user.name;
+      document.getElementById('userBalance').textContent = `${globalData.user.balance} pts`;
+      document.getElementById('headerAvatarBox').innerHTML = getAvatarHTML(globalData.user.avatar);
+      renderCurrentTab();
+    }
+
+    function setTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.className = 'tab-btn flex flex-col items-center text-slate-400 py-1');
+      document.getElementById(`tab-${tab}`).className = 'tab-btn flex flex-col items-center text-emerald-500 py-1';
+      renderCurrentTab();
+    }
+
+    function setCalendarView(view) {
+      calendarView = view;
+      renderCurrentTab();
+    }
+
+    async function renderCurrentTab() {
+      const container = document.getElementById('contentArea');
+      container.innerHTML = '';
+
+      if (currentTab === 'tasks') {
+        renderTasks(container);
+      } else if (currentTab === 'leaderboard') {
+        await renderLeaderboard(container);
+      } else if (currentTab === 'rewards') {
+        renderRewards(container);
+      }
+    }
+
+    // --- CALENDARIO DIDÁCTICO CON FLAMAS EN FORMATO MENSUAL ---
+    function renderDidacticCalendar() {
+      const now = new Date();
+      let viewContent = '';
+
+      if (calendarView === 'day') {
+        const todayStr = globalData.today_str;
+        const isPerfect = globalData.perfect_days.includes(todayStr);
+        const hasDone = globalData.active_days.includes(todayStr);
+
+        viewContent = `
+          <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold text-slate-700 block">Resumen de Hoy</span>
+              <span class="text-[11px] text-slate-400">${globalData.completed_today.length} de ${globalData.tasks.length} metas cumplidas</span>
+            </div>
+            <div class="w-9 h-9 flex items-center justify-center">
+              ${isPerfect ? `<img src="/static/azul.png" class="w-8 h-8 object-contain">` : (hasDone ? `<img src="/static/naranja.png" class="w-7 h-7 object-contain">` : '<span class="text-xs text-slate-400 font-bold">Pendiente</span>')}
+            </div>
+          </div>
+        `;
+      } else if (calendarView === 'week') {
+        const startOfWeek = new Date(now);
+        const dayOfWeek = (now.getDay() + 6) % 7; // Lunes = 0
+        startOfWeek.setDate(now.getDate() - dayOfWeek);
+
+        let weekHTML = '<div class="grid grid-cols-7 gap-1 text-center">';
+        const dayNames = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(startOfWeek);
+          d.setDate(startOfWeek.getDate() + i);
+          const dStr = d.toISOString().split('T')[0];
+          const isToday = dStr === globalData.today_str;
+          const isPerfect = globalData.perfect_days.includes(dStr);
+          const hasDone = globalData.active_days.includes(dStr);
+
+          weekHTML += `
+            <div class="flex flex-col items-center p-1.5 rounded-xl border ${isToday ? 'border-emerald-400 bg-emerald-50/50' : 'border-slate-100 bg-slate-50'}">
+              <span class="text-[10px] font-bold text-slate-400">${dayNames[i]}</span>
+              <span class="text-xs font-black text-slate-700 my-0.5">${d.getDate()}</span>
+              <div class="h-5 flex items-center justify-center">
+                ${isPerfect ? `<img src="/static/azul.png" class="w-4 h-4 object-contain">` : (hasDone ? `<img src="/static/naranja.png" class="w-4 h-4 object-contain">` : '<span class="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>')}
+              </div>
+            </div>
+          `;
+        }
+        weekHTML += '</div>';
+        viewContent = weekHTML;
+
+      } else if (calendarView === 'month') {
+        const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const currentYearMonth = now.toISOString().slice(0, 7);
+
+        let grid = '<div class="grid grid-cols-7 gap-1.5 text-center">';
+        for (let i = 1; i <= totalDays; i++) {
+          const dayStr = `${currentYearMonth}-${String(i).padStart(2, '0')}`;
+          const isToday = dayStr === globalData.today_str;
+          const isPerfect = globalData.perfect_days.includes(dayStr);
+          const hasDone = globalData.active_days.includes(dayStr);
+
+          let bg = 'bg-slate-50 text-slate-400 border border-slate-100';
+          let flameHTML = '';
+
+          if (isPerfect) {
+            bg = 'bg-sky-50 text-sky-800 font-bold border border-sky-300 shadow-sm';
+            flameHTML = `<img src="/static/azul.png" class="w-3.5 h-3.5 object-contain ml-0.5">`;
+          } else if (hasDone) {
+            bg = 'bg-emerald-50 text-emerald-800 font-bold border border-emerald-300 shadow-sm';
+            flameHTML = `<img src="/static/naranja.png" class="w-3.5 h-3.5 object-contain ml-0.5">`;
+          }
+
+          if (isToday && !hasDone) {
+            bg = 'bg-white text-emerald-600 font-bold border-2 border-emerald-400 shadow-sm';
+          }
+
+          grid += `
+            <div class="h-8 flex items-center justify-center rounded-xl text-xs ${bg}">
+              <span>${i}</span>
+              ${flameHTML}
+            </div>
+          `;
+        }
+        grid += '</div>';
+        viewContent = grid;
+      }
+
+      return `
+        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+          <div class="flex justify-between items-center">
+            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Historial</span>
+            <div class="flex bg-slate-100 p-0.5 rounded-lg text-[11px] font-bold">
+              <button onclick="setCalendarView('day')" class="px-2.5 py-1 rounded-md ${calendarView === 'day' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}">Día</button>
+              <button onclick="setCalendarView('week')" class="px-2.5 py-1 rounded-md ${calendarView === 'week' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}">Semana</button>
+              <button onclick="setCalendarView('month')" class="px-2.5 py-1 rounded-md ${calendarView === 'month' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}">Mes</button>
+            </div>
+          </div>
+          ${viewContent}
+        </div>
+      `;
+    }
+
+  function renderTasks(container) {
+  const user = globalData.user;
+  const now = new Date();
+  const formattedDate = now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // Lógica estricta de flama general:
+  // Solo se muestra flama si es dorada, morada, azul o si la racha naranja tiene >= 2 días
+  const hasStreak = user.streak >= 2 || user.flame_type !== 'none';
+  const flameSrc = getFlameImage(user.flame_type);
+  
+  let flameLabel = user.streak === 1 ? '1 DÍA' : `${user.streak} DÍAS`;
+  let flameBorder = 'border-slate-200 bg-slate-50';
+  let flameGraphic = `<span class="text-xs text-slate-400 font-bold px-1">🌱</span>`;
+
+  if (user.flame_type === 'dorada') {
+    flameLabel = 'MENSUAL 👑';
+    flameBorder = 'border-yellow-400 bg-yellow-50 ring-2 ring-yellow-200';
+    flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
+  } else if (user.flame_type === 'morada') {
+    flameLabel = 'SEMANAL 🔮';
+    flameBorder = 'border-purple-300 bg-purple-50 ring-2 ring-purple-200';
+    flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
+  } else if (user.flame_type === 'azul') {
+    flameLabel = 'PERFECTO ⚡';
+    flameBorder = 'border-sky-300 bg-sky-50 ring-2 ring-sky-200';
+    flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
+  } else if (user.flame_type === 'naranja' && user.streak >= 2) {
+    flameLabel = `${user.streak} DÍAS`;
+    flameBorder = 'border-amber-200 bg-amber-50';
+    flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
+  }
+
+  container.innerHTML = `
+    <div class="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+      <div>
+        <span class="text-xs text-emerald-600 font-bold block capitalize">${formattedDate}</span>
+        <h2 class="text-base font-extrabold text-slate-800">Metas Diarias</h2>
+      </div>
+      <div class="flex items-center px-3 py-1.5 rounded-xl border ${flameBorder} transition-all">
+        ${flameGraphic}
+        <div class="text-right">
+          <span class="text-base font-black text-slate-800 leading-none block">${user.streak}</span>
+          <span class="text-[9px] text-slate-400 block font-bold">${flameLabel}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+      <div class="flex justify-between text-xs mb-1.5 font-bold">
+        <span class="text-slate-500">Meta Semanal</span>
+        <span class="text-emerald-600">${user.balance} / ${user.target} pts</span>
+      </div>
+      <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+        <div class="bg-emerald-400 h-2.5 transition-all duration-300 rounded-full" style="width: ${Math.min((user.balance / user.target) * 100, 100)}%"></div>
+      </div>
+    </div>
+
+    ${renderDidacticCalendar()}
+
+    <div class="space-y-2.5">
+      ${globalData.tasks.map(t => {
+        const done = globalData.completed_today.includes(t.id);
+        const taskStreak = (globalData.task_streaks && globalData.task_streaks[t.id]) || 0;
+        
+        return `
+          <div class="flex items-center justify-between p-3.5 bg-white rounded-2xl border ${done ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-100 shadow-sm'}">
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="font-bold text-sm ${done ? 'line-through text-slate-400' : 'text-slate-700'}">${t.name}</span>
+                ${taskStreak >= 2 ? `<img src="/static/naranja.png" class="w-3.5 h-3.5 object-contain" title="Racha de ${taskStreak} días">` : ''}
+              </div>
+              <div class="text-xs text-emerald-600 font-extrabold">+${t.points} pts</div>
+            </div>
+            <button 
+              onclick="toggleTask('${t.id}')" 
+              class="px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${done ? 'bg-slate-200 text-slate-600 hover:bg-rose-100 hover:text-rose-600' : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-200'}">
+              ${done ? 'Listo ✓' : 'Completar'}
+            </button>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+    async function toggleTask(taskId) {
+      const res = await fetch('/api/toggle-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: currentUser, task_id: taskId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.event_type && data.event_type !== 'unmarked' && data.event_type !== 'none') {
+          triggerFlamePop(data.event_type);
+        }
+        loadState();
+      }
+    }
+
+    async function renderLeaderboard(container) {
+      container.innerHTML = `
+        <div class="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-bold">
+          <button onclick="fetchLeaderboard('day', this)" class="lb-scope flex-1 py-1.5 rounded-lg bg-white text-slate-800 shadow-sm">Día</button>
+          <button onclick="fetchLeaderboard('week', this)" class="lb-scope flex-1 py-1.5 rounded-lg text-slate-400">Semana</button>
+          <button onclick="fetchLeaderboard('month', this)" class="lb-scope flex-1 py-1.5 rounded-lg text-slate-400">Mes</button>
+          <button onclick="fetchLeaderboard('year', this)" class="lb-scope flex-1 py-1.5 rounded-lg text-slate-400">Año</button>
+        </div>
+        <div id="lbList" class="space-y-2">Cargando ranking...</div>
+      `;
+      fetchLeaderboard('day', document.querySelector('.lb-scope'));
+    }
+
+    async function fetchLeaderboard(scope, btn) {
+      if (btn) {
+        document.querySelectorAll('.lb-scope').forEach(b => {
+          b.className = 'lb-scope flex-1 py-1.5 rounded-lg text-slate-400 font-bold';
+        });
+        btn.className = 'lb-scope flex-1 py-1.5 rounded-lg bg-white text-slate-800 shadow-sm font-bold';
+      }
+      const res = await fetch(`/api/leaderboard?scope=${scope}`);
+      const lb = await res.json();
+      const list = document.getElementById('lbList');
+      list.innerHTML = lb.map((entry, idx) => `
+        <div class="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-100 shadow-sm">
+          <div class="flex items-center space-x-3">
+            <span class="text-base font-black ${idx === 0 ? 'text-amber-400' : 'text-slate-300'}">#${idx + 1}</span>
+            <div class="w-8 h-8 rounded-full overflow-hidden border border-slate-200 flex items-center justify-center bg-slate-100">
+              ${getAvatarHTML(entry.avatar)}
+            </div>
+            <span class="font-bold text-slate-700 text-sm">${entry.name}</span>
+          </div>
+          <span class="text-emerald-600 font-black text-sm">${entry.score} pts</span>
+        </div>
+      `).join('');
+    }
+
+    function renderRewards(container) {
+      container.innerHTML = `
+        <div class="space-y-3">
+          ${globalData.rewards.map(r => {
+            const canAfford = globalData.user.balance >= r.cost;
+            return `
+              <div class="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center">
+                <div>
+                  <div class="font-bold text-slate-700 text-sm">${r.name}</div>
+                  <div class="text-xs text-rose-500 font-extrabold">${r.cost} pts</div>
+                </div>
+                <button 
+                  onclick="redeemReward('${r.id}')"
+                  ${!canAfford ? 'disabled' : ''}
+                  class="px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${canAfford ? 'bg-rose-400 hover:bg-rose-500 text-white shadow-sm shadow-rose-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}">
+                  Canjear
+                </button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    async function redeemReward(rewardId) {
+      if (!confirm('¿Deseas canjear esta recompensa?')) return;
+      const res = await fetch('/api/redeem-reward', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: currentUser, reward_id: rewardId })
+      });
+      if (res.ok) loadState();
+    }
+
+    function previewAvatar(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          document.getElementById('modalAvatarBox').innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    async function saveProfile() {
+      const editName = document.getElementById('editName').value.trim();
+      const editUsername = document.getElementById('editUsername').value.trim();
+      const editPassword = document.getElementById('editPassword').value.trim();
+      const avatarFile = document.getElementById('avatarInput').files[0];
+      const msgBox = document.getElementById('profileMsg');
+
+      const formData = new FormData();
+      formData.append('current_user_id', currentUser);
+      formData.append('name', editName);
+      formData.append('username', editUsername);
+      if (editPassword) formData.append('password', editPassword);
+      if (avatarFile) formData.append('avatar', avatarFile);
+
+      const res = await fetch('/api/update-profile', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      msgBox.classList.remove('hidden');
+      if (res.ok) {
+        msgBox.className = 'text-xs font-semibold text-center text-emerald-600';
+        msgBox.textContent = '¡Perfil actualizado correctamente!';
+        currentUser = data.user_id;
+        localStorage.setItem('inador_user', currentUser);
+        setTimeout(() => {
+          toggleProfileModal(false);
+          loadState();
+        }, 600);
+      } else {
+        msgBox.className = 'text-xs font-semibold text-center text-rose-500';
+        msgBox.textContent = data.error || 'Error al actualizar perfil';
+      }
+    }
+
+    loadState();
+  </script>
+</body>
+</html>
