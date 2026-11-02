@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import json
 import os
 
@@ -22,9 +22,7 @@ def save_data(data):
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-# --- CÁLCULO DE RACHAS ESTRICTAS ---
 def calculate_consecutive_days(dates_list):
-    """Calcula días seguidos hasta hoy o ayer. Si no hubo ayer ni hoy, es 0."""
     if not dates_list:
         return 0
     unique_dates = sorted(list(set(dates_list)), reverse=True)
@@ -49,22 +47,91 @@ def calculate_consecutive_days(dates_list):
 def get_all_streaks(data, user_id):
     user_logs = [log for log in data['task_logs'] if log['user_id'] == user_id]
     
-    # 1. Racha individual por meta
     task_streaks = {}
     for task in data['tasks']:
         tid = task['id']
         t_dates = [log['date'] for log in user_logs if log.get('task_id') == tid]
         task_streaks[tid] = calculate_consecutive_days(t_dates)
 
-    # 2. Racha global de días activos (al menos 1 meta)
     active_dates = [log['date'] for log in user_logs if log.get('task_id') != 'bonus_all_completed']
     global_streak = calculate_consecutive_days(active_dates)
 
-    # 3. Racha de días perfectos (todas las metas completadas sin trampas)
     perfect_dates = [log['date'] for log in user_logs if log.get('task_id') == 'bonus_all_completed']
     perfect_streak = calculate_consecutive_days(perfect_dates)
 
     return global_streak, perfect_streak, task_streaks
+
+def record_activity_and_check_violations(data, user_id, now):
+    user = data['users'].get(user_id)
+    if not user:
+        return
+    
+    # Registrar última actividad
+    user['last_active'] = now.isoformat()
+    
+    # Comprobar si está violando su ventana de dormir actual
+    sleep_str = user.get('sleep_time', '23:00')
+    wake_str = user.get('wake_time', '07:00')
+    days_enabled = user.get('alarm_days', [0,1,2,3,4,5,6]) # 0=Lun, 6=Dom
+    
+    # Si hoy aplica la alarma
+    if now.weekday() in days_enabled:
+        sh, sm = map(int, sleep_str.split(':'))
+        wh, wm = map(int, wake_str.split(':'))
+        
+        sleep_dt = datetime.combine(now.date(), time(sh, sm))
+        offline_start = sleep_dt - timedelta(minutes=30)
+        wake_dt = datetime.combine(now.date(), time(wh, wm))
+        if wake_dt <= sleep_dt:
+            # Caso cruce de medianoche
+            wake_dt += timedelta(days=1)
+            if now < sleep_dt:
+                offline_start -= timedelta(days=1)
+                wake_dt -= timedelta(days=1)
+
+        # Si interactúa dentro del horario de desconexión
+        if offline_start <= now <= wake_dt:
+            date_key = now.strftime('%Y-%m-%d')
+            cheat_key = f"{user_id}_{date_key}_offline_fail"
+            if cheat_key not in data['cheats']:
+                data['cheats'].append(cheat_key)
+
+def verify_and_grant_offline_goal(data, user_id, now):
+    user = data['users'].get(user_id)
+    if not user:
+        return
+    
+    today_str = now.strftime('%Y-%m-%d')
+    days_enabled = user.get('alarm_days', [0,1,2,3,4,5,6])
+    
+    # Solo procesar si el usuario tiene habilitado el día y ya pasó su hora de despertar
+    wh, wm = map(int, user.get('wake_time', '07:00').split(':'))
+    wake_today = datetime.combine(now.date(), time(wh, wm))
+    
+    if now < wake_today:
+        return
+
+    # Verificar si falló anoche
+    failed = f"{user_id}_{today_str}_offline_fail" in data['cheats']
+    
+    # Verificar si ya tiene registrada la tarea 't3' (Off line 30min)
+    already_done = any(
+        log['user_id'] == user_id and log.get('task_id') == 't3' and log['date'] == today_str
+        for log in data['task_logs']
+    )
+
+    if not failed and not already_done:
+        # Otorgar meta automáticamente
+        task_points = 1
+        user['balance'] += task_points
+        data['task_logs'].append({
+            "user_id": user_id,
+            "task_id": "t3",
+            "points": task_points,
+            "date": today_str,
+            "timestamp": now.isoformat(),
+            "auto": True
+        })
 
 @app.route('/')
 def index():
@@ -105,7 +172,12 @@ def register():
         "password": password,
         "balance": 0,
         "target": target,
-        "avatar": avatar_path
+        "avatar": avatar_path,
+        "sleep_time": "23:00",
+        "wake_time": "07:00",
+        "alarm_days": [0, 1, 2, 3, 4, 5, 6],
+        "alarm_enabled": True,
+        "last_active": datetime.now().isoformat()
     }
     save_data(data)
     return jsonify({"success": True, "user_id": username, "name": nickname})
@@ -123,6 +195,29 @@ def login():
         return jsonify({"error": "Usuario o contraseña incorrectos"}), 401
 
     return jsonify({"success": True, "user_id": username, "name": user['name']})
+
+@app.route('/api/alarm-settings', methods=['POST'])
+def update_alarm_settings():
+    payload = request.json
+    user_id = payload.get('user_id')
+    data = load_data()
+
+    if user_id not in data['users']:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    user = data['users'][user_id]
+    user['sleep_time'] = payload.get('sleep_time', user.get('sleep_time', '23:00'))
+    user['wake_time'] = payload.get('wake_time', user.get('wake_time', '07:00'))
+    user['alarm_days'] = payload.get('alarm_days', user.get('alarm_days', [0, 1, 2, 3, 4, 5, 6]))
+    user['alarm_enabled'] = bool(payload.get('alarm_enabled', True))
+
+    save_data(data)
+    return jsonify({"success": True, "settings": {
+        "sleep_time": user['sleep_time'],
+        "wake_time": user['wake_time'],
+        "alarm_days": user['alarm_days'],
+        "alarm_enabled": user['alarm_enabled']
+    }})
 
 @app.route('/api/update-profile', methods=['POST'])
 def update_profile():
@@ -185,6 +280,11 @@ def get_state():
     if user_id not in data['users']:
         return jsonify({"error": "Usuario no encontrado"}), 404
 
+    # Registro de actividad y chequeo offline
+    record_activity_and_check_violations(data, user_id, now)
+    verify_and_grant_offline_goal(data, user_id, now)
+    save_data(data)
+
     completed_today = [
         log['task_id'] for log in data['task_logs']
         if log['user_id'] == user_id and log['date'] == today_str and log['task_id'] != 'bonus_all_completed'
@@ -196,11 +296,6 @@ def get_state():
 
     global_streak, perfect_streak, task_streaks = get_all_streaks(data, user_id)
     
-    # Determinación estricta de la flama en pantalla:
-    # - Dorada: 28 días seguidos de TODAS las metas cumplidas
-    # - Morada: 7 días seguidos de TODAS las metas cumplidas
-    # - Azul: Día perfecto hoy
-    # - Naranja: Racha real activa (mínimo 2 días consecutivos)
     flame_type = "none"
     if perfect_streak >= 28:
         flame_type = "dorada"
@@ -218,6 +313,10 @@ def get_state():
         "balance": user_data["balance"],
         "target": user_data.get("target", 15),
         "avatar": user_data.get("avatar", ""),
+        "sleep_time": user_data.get("sleep_time", "23:00"),
+        "wake_time": user_data.get("wake_time", "07:00"),
+        "alarm_days": user_data.get("alarm_days", [0, 1, 2, 3, 4, 5, 6]),
+        "alarm_enabled": user_data.get("alarm_enabled", True),
         "streak": global_streak,
         "perfect_streak": perfect_streak,
         "flame_type": flame_type
@@ -255,11 +354,9 @@ def toggle_task():
     event_type = "none"
 
     if existing_index is not None:
-        # --- DESMARCAR META ---
         del data['task_logs'][existing_index]
         data['users'][user_id]['balance'] = max(0, data['users'][user_id]['balance'] - task['points'])
         
-        # Bandera silenciosa anti-trampas: anula el día perfecto
         cheat_key = f"{user_id}_{today_str}"
         if cheat_key not in data['cheats']:
             data['cheats'].append(cheat_key)
@@ -274,7 +371,6 @@ def toggle_task():
 
         event_type = "unmarked"
     else:
-        # --- MARCAR META ---
         data['users'][user_id]['balance'] += task['points']
         data['task_logs'].append({
             "user_id": user_id,
@@ -284,15 +380,12 @@ def toggle_task():
             "timestamp": now.isoformat()
         })
 
-        # Revisar racha de esta meta específica
         user_logs = [log for log in data['task_logs'] if log['user_id'] == user_id and log.get('task_id') == task_id]
         this_task_streak = calculate_consecutive_days([log['date'] for log in user_logs])
 
-        # Solo dispara animación naranja si esta meta ya lleva 2 o más días consecutivos
         if this_task_streak >= 2:
             event_type = "naranja"
 
-        # Verificar si hoy completó el 100% de las metas
         completed_today = [
             log['task_id'] for log in data['task_logs']
             if log['user_id'] == user_id and log['date'] == today_str and log['task_id'] != 'bonus_all_completed'
@@ -316,7 +409,6 @@ def toggle_task():
                     "timestamp": now.isoformat()
                 })
                 
-                # Evaluar racha perfecta sostenida (7 o 28 días seguidos)
                 _, p_streak, _ = get_all_streaks(data, user_id)
                 if p_streak >= 28:
                     event_type = "dorada"

@@ -38,7 +38,6 @@
     <div id="flameContainer" class="relative flex items-center justify-center"></div>
   </div>
 
-  <!-- SVG DE SILUETA TIPO WHATSAPP -->
   <svg class="hidden">
     <g id="icon-default-avatar">
       <circle cx="50" cy="50" r="50" fill="#E2E8F0"/>
@@ -160,10 +159,13 @@
   <!-- CONTENEDOR PRINCIPAL -->
   <main class="flex-1 overflow-y-auto p-4 space-y-4" id="contentArea"></main>
 
-  <!-- NAVEGACIÓN INFERIOR -->
+  <!-- BARRA DE NAVEGACIÓN INFERIOR (4 PESTAÑAS) -->
   <nav class="h-16 bg-white border-t border-slate-100 flex justify-around items-center text-xs font-semibold shadow-lg">
     <button onclick="setTab('tasks')" class="tab-btn flex flex-col items-center text-emerald-500 py-1" id="tab-tasks">
       <span class="text-lg">✓</span><span>Metas</span>
+    </button>
+    <button onclick="setTab('alarm')" class="tab-btn flex flex-col items-center text-slate-400 py-1" id="tab-alarm">
+      <span class="text-lg">⏰</span><span>Alarm</span>
     </button>
     <button onclick="setTab('leaderboard')" class="tab-btn flex flex-col items-center text-slate-400 py-1" id="tab-leaderboard">
       <span class="text-lg">🏆</span><span>Ranking</span>
@@ -180,7 +182,6 @@
     let calendarView = 'month';
     let globalData = null;
 
-    // --- SINTETIZADOR DE CAMPANITAS CON WEB AUDIO API ---
     let audioCtx = null;
     function playChimeSound() {
       try {
@@ -192,7 +193,6 @@
         }
 
         const now = audioCtx.currentTime;
-        // Acorde armónico de campanitas (Mi, Sol#, Si, Mi agudo)
         const notes = [659.25, 830.61, 987.77, 1318.51];
 
         notes.forEach((freq, idx) => {
@@ -202,7 +202,6 @@
           osc.type = 'sine';
           osc.frequency.setValueAtTime(freq, now + idx * 0.08);
 
-          // Envolvente de volumen (campana: ataque rápido y caída suave)
           gain.gain.setValueAtTime(0, now + idx * 0.08);
           gain.gain.linearRampToValueAtTime(0.18, now + idx * 0.08 + 0.02);
           gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.08 + 1.2);
@@ -213,9 +212,7 @@
           osc.start(now + idx * 0.08);
           osc.stop(now + idx * 0.08 + 1.25);
         });
-      } catch (e) {
-        console.error('AudioContext error:', e);
-      }
+      } catch (e) {}
     }
 
     function getAvatarHTML(url, sizeClass = "w-full h-full") {
@@ -232,7 +229,6 @@
       return '/static/naranja.png';
     }
 
-    // ANIMACIÓN FLOTANTE TIPO INSTAGRAM + SONIDO DE CAMPANITAS
     function triggerFlamePop(type) {
       playChimeSound();
 
@@ -392,6 +388,8 @@
 
       if (currentTab === 'tasks') {
         renderTasks(container);
+      } else if (currentTab === 'alarm') {
+        renderAlarm(container);
       } else if (currentTab === 'leaderboard') {
         await renderLeaderboard(container);
       } else if (currentTab === 'rewards') {
@@ -399,7 +397,6 @@
       }
     }
 
-    // --- CALENDARIO DIDÁCTICO CON FLAMAS EN FORMATO MENSUAL ---
     function renderDidacticCalendar() {
       const now = new Date();
       let viewContent = '';
@@ -422,7 +419,7 @@
         `;
       } else if (calendarView === 'week') {
         const startOfWeek = new Date(now);
-        const dayOfWeek = (now.getDay() + 6) % 7; // Lunes = 0
+        const dayOfWeek = (now.getDay() + 6) % 7;
         startOfWeek.setDate(now.getDate() - dayOfWeek);
 
         let weekHTML = '<div class="grid grid-cols-7 gap-1 text-center">';
@@ -501,90 +498,204 @@
       `;
     }
 
-  function renderTasks(container) {
-  const user = globalData.user;
-  const now = new Date();
-  const formattedDate = now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+    function renderTasks(container) {
+      const user = globalData.user;
+      const now = new Date();
+      const formattedDate = now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  // Lógica estricta de flama general:
-  // Solo se muestra flama si es dorada, morada, azul o si la racha naranja tiene >= 2 días
-  const hasStreak = user.streak >= 2 || user.flame_type !== 'none';
-  const flameSrc = getFlameImage(user.flame_type);
-  
-  let flameLabel = user.streak === 1 ? '1 DÍA' : `${user.streak} DÍAS`;
-  let flameBorder = 'border-slate-200 bg-slate-50';
-  let flameGraphic = `<span class="text-xs text-slate-400 font-bold px-1">🌱</span>`;
+      const flameSrc = getFlameImage(user.flame_type);
+      let flameLabel = user.streak === 1 ? '1 DÍA' : `${user.streak} DÍAS`;
+      let flameBorder = 'border-slate-200 bg-slate-50';
+      let flameGraphic = `<span class="text-xs text-slate-400 font-bold px-1">🌱</span>`;
 
-  if (user.flame_type === 'dorada') {
-    flameLabel = 'MENSUAL 👑';
-    flameBorder = 'border-yellow-400 bg-yellow-50 ring-2 ring-yellow-200';
-    flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
-  } else if (user.flame_type === 'morada') {
-    flameLabel = 'SEMANAL 🔮';
-    flameBorder = 'border-purple-300 bg-purple-50 ring-2 ring-purple-200';
-    flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
-  } else if (user.flame_type === 'azul') {
-    flameLabel = 'PERFECTO ⚡';
-    flameBorder = 'border-sky-300 bg-sky-50 ring-2 ring-sky-200';
-    flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
-  } else if (user.flame_type === 'naranja' && user.streak >= 2) {
-    flameLabel = `${user.streak} DÍAS`;
-    flameBorder = 'border-amber-200 bg-amber-50';
-    flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
-  }
+      if (user.flame_type === 'dorada') {
+        flameLabel = 'MENSUAL 👑';
+        flameBorder = 'border-yellow-400 bg-yellow-50 ring-2 ring-yellow-200';
+        flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
+      } else if (user.flame_type === 'morada') {
+        flameLabel = 'SEMANAL 🔮';
+        flameBorder = 'border-purple-300 bg-purple-50 ring-2 ring-purple-200';
+        flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
+      } else if (user.flame_type === 'azul') {
+        flameLabel = 'PERFECTO ⚡';
+        flameBorder = 'border-sky-300 bg-sky-50 ring-2 ring-sky-200';
+        flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
+      } else if (user.flame_type === 'naranja' && user.streak >= 2) {
+        flameLabel = `${user.streak} DÍAS`;
+        flameBorder = 'border-amber-200 bg-amber-50';
+        flameGraphic = `<img src="${flameSrc}" class="w-6 h-6 object-contain mr-1.5">`;
+      }
 
-  container.innerHTML = `
-    <div class="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-      <div>
-        <span class="text-xs text-emerald-600 font-bold block capitalize">${formattedDate}</span>
-        <h2 class="text-base font-extrabold text-slate-800">Metas Diarias</h2>
-      </div>
-      <div class="flex items-center px-3 py-1.5 rounded-xl border ${flameBorder} transition-all">
-        ${flameGraphic}
-        <div class="text-right">
-          <span class="text-base font-black text-slate-800 leading-none block">${user.streak}</span>
-          <span class="text-[9px] text-slate-400 block font-bold">${flameLabel}</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-      <div class="flex justify-between text-xs mb-1.5 font-bold">
-        <span class="text-slate-500">Meta Semanal</span>
-        <span class="text-emerald-600">${user.balance} / ${user.target} pts</span>
-      </div>
-      <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-        <div class="bg-emerald-400 h-2.5 transition-all duration-300 rounded-full" style="width: ${Math.min((user.balance / user.target) * 100, 100)}%"></div>
-      </div>
-    </div>
-
-    ${renderDidacticCalendar()}
-
-    <div class="space-y-2.5">
-      ${globalData.tasks.map(t => {
-        const done = globalData.completed_today.includes(t.id);
-        const taskStreak = (globalData.task_streaks && globalData.task_streaks[t.id]) || 0;
-        
-        return `
-          <div class="flex items-center justify-between p-3.5 bg-white rounded-2xl border ${done ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-100 shadow-sm'}">
-            <div>
-              <div class="flex items-center space-x-1.5">
-                <span class="font-bold text-sm ${done ? 'line-through text-slate-400' : 'text-slate-700'}">${t.name}</span>
-                ${taskStreak >= 2 ? `<img src="/static/naranja.png" class="w-3.5 h-3.5 object-contain" title="Racha de ${taskStreak} días">` : ''}
-              </div>
-              <div class="text-xs text-emerald-600 font-extrabold">+${t.points} pts</div>
-            </div>
-            <button 
-              onclick="toggleTask('${t.id}')" 
-              class="px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${done ? 'bg-slate-200 text-slate-600 hover:bg-rose-100 hover:text-rose-600' : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-200'}">
-              ${done ? 'Listo ✓' : 'Completar'}
-            </button>
+      container.innerHTML = `
+        <div class="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+          <div>
+            <span class="text-xs text-emerald-600 font-bold block capitalize">${formattedDate}</span>
+            <h2 class="text-base font-extrabold text-slate-800">Metas Diarias</h2>
           </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
+          <div class="flex items-center px-3 py-1.5 rounded-xl border ${flameBorder} transition-all">
+            ${flameGraphic}
+            <div class="text-right">
+              <span class="text-base font-black text-slate-800 leading-none block">${user.streak}</span>
+              <span class="text-[9px] text-slate-400 block font-bold">${flameLabel}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+          <div class="flex justify-between text-xs mb-1.5 font-bold">
+            <span class="text-slate-500">Meta Semanal</span>
+            <span class="text-emerald-600">${user.balance} / ${user.target} pts</span>
+          </div>
+          <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+            <div class="bg-emerald-400 h-2.5 transition-all duration-300 rounded-full" style="width: ${Math.min((user.balance / user.target) * 100, 100)}%"></div>
+          </div>
+        </div>
+
+        ${renderDidacticCalendar()}
+
+        <div class="space-y-2.5">
+          ${globalData.tasks.map(t => {
+            const done = globalData.completed_today.includes(t.id);
+            const taskStreak = (globalData.task_streaks && globalData.task_streaks[t.id]) || 0;
+            
+            return `
+              <div class="flex items-center justify-between p-3.5 bg-white rounded-2xl border ${done ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-100 shadow-sm'}">
+                <div>
+                  <div class="flex items-center space-x-1.5">
+                    <span class="font-bold text-sm ${done ? 'line-through text-slate-400' : 'text-slate-700'}">${t.name}</span>
+                    ${taskStreak >= 2 ? `<img src="/static/naranja.png" class="w-3.5 h-3.5 object-contain" title="Racha de ${taskStreak} días">` : ''}
+                  </div>
+                  <div class="text-xs text-emerald-600 font-extrabold">+${t.points} pts</div>
+                </div>
+                <button 
+                  onclick="toggleTask('${t.id}')" 
+                  class="px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${done ? 'bg-slate-200 text-slate-600 hover:bg-rose-100 hover:text-rose-600' : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-200'}">
+                  ${done ? 'Listo ✓' : 'Completar'}
+                </button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    // --- PESTAÑA ALARM ---
+    function renderAlarm(container) {
+      const user = globalData.user;
+      const days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+      const activeDays = user.alarm_days || [0,1,2,3,4,5,6];
+
+      // Cálculo de ventana de desconexión
+      const sleepParts = (user.sleep_time || '23:00').split(':');
+      let h = parseInt(sleepParts[0]);
+      let m = parseInt(sleepParts[1]) - 30;
+      if (m < 0) {
+        m += 60;
+        h = (h - 1 + 24) % 24;
+      }
+      const offlineStartStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+      container.innerHTML = `
+        <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+          <div>
+            <h2 class="text-base font-extrabold text-slate-800">Control de Sueño & Alarma</h2>
+            <p class="text-xs text-slate-400">Configura tus horas para el control automático de la meta Offline 30min.</p>
+          </div>
+
+          <!-- Ventana de Desconexión Calculada -->
+          <div class="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200">
+            <span class="text-[11px] font-bold text-emerald-800 uppercase block mb-1">Ventana Offline Nocturna</span>
+            <div class="text-xs text-emerald-700">
+              No abras la app entre las <span class="font-extrabold">${offlineStartStr}</span> y las <span class="font-extrabold">${user.wake_time || '07:00'}</span> para ganar tu punto automático.
+            </div>
+          </div>
+
+          <!-- Campos de Horas -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+              <label class="text-[11px] font-bold text-slate-500 block mb-1">Hora de Dormir</label>
+              <input type="time" id="alarmSleepInput" value="${user.sleep_time || '23:00'}" class="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+            </div>
+
+            <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+              <label class="text-[11px] font-bold text-slate-500 block mb-1">Despertar</label>
+              <input type="time" id="alarmWakeInput" value="${user.wake_time || '07:00'}" class="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+            </div>
+          </div>
+
+          <!-- Días de la semana -->
+          <div>
+            <label class="text-[11px] font-bold text-slate-500 block mb-2">Días Activos</label>
+            <div class="grid grid-cols-7 gap-1.5" id="alarmDaysGrid">
+              ${days.map((d, idx) => {
+                const isSel = activeDays.includes(idx);
+                return `
+                  <button 
+                    onclick="toggleAlarmDay(${idx})" 
+                    id="alarmDayBtn_${idx}"
+                    class="h-9 rounded-xl text-xs font-black transition-all ${isSel ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-100 text-slate-400'}">
+                    ${d}
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <div id="alarmMsg" class="text-xs font-semibold text-center hidden"></div>
+
+          <button onclick="saveAlarmSettings()" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 py-3 rounded-xl font-bold text-white text-sm shadow-md shadow-emerald-200 transition-all">
+            Guardar Configuración
+          </button>
+        </div>
+      `;
+    }
+
+    let currentAlarmDays = null;
+    function toggleAlarmDay(dayIndex) {
+      if (!currentAlarmDays) {
+        currentAlarmDays = [...(globalData.user.alarm_days || [0,1,2,3,4,5,6])];
+      }
+      const idx = currentAlarmDays.indexOf(dayIndex);
+      if (idx > -1) {
+        currentAlarmDays.splice(idx, 1);
+      } else {
+        currentAlarmDays.push(dayIndex);
+      }
+      const btn = document.getElementById(`alarmDayBtn_${dayIndex}`);
+      if (btn) {
+        const isSel = currentAlarmDays.includes(dayIndex);
+        btn.className = `h-9 rounded-xl text-xs font-black transition-all ${isSel ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-100 text-slate-400'}`;
+      }
+    }
+
+    async function saveAlarmSettings() {
+      const sleepTime = document.getElementById('alarmSleepInput').value;
+      const wakeTime = document.getElementById('alarmWakeInput').value;
+      const days = currentAlarmDays || globalData.user.alarm_days || [0,1,2,3,4,5,6];
+      const msgBox = document.getElementById('alarmMsg');
+
+      const res = await fetch('/api/alarm-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUser,
+          sleep_time: sleepTime,
+          wake_time: wakeTime,
+          alarm_days: days,
+          alarm_enabled: true
+        })
+      });
+
+      msgBox.classList.remove('hidden');
+      if (res.ok) {
+        msgBox.className = 'text-xs font-semibold text-center text-emerald-600';
+        msgBox.textContent = '¡Horarios guardados correctamente!';
+        setTimeout(() => loadState(), 600);
+      } else {
+        msgBox.className = 'text-xs font-semibold text-center text-rose-500';
+        msgBox.textContent = 'Error al guardar horarios';
+      }
+    }
 
     async function toggleTask(taskId) {
       const res = await fetch('/api/toggle-task', {
