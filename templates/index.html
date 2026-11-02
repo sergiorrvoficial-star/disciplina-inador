@@ -578,16 +578,19 @@
         </div>
       `;
     }
-
-    // --- PESTAÑA ALARM CON ACCESO DIRECTO AL RELOJ ---
+// --- PESTAÑA ALARM (SIN BOTÓN NATIVO, MENSAJE CLARO) ---
 function renderAlarm(container) {
   const user = globalData.user;
   const days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
   const activeDays = user.alarm_days || [0,1,2,3,4,5,6];
 
-  const sleepParts = (user.sleep_time || '23:00').split(':');
-  let h = parseInt(sleepParts[0]);
-  let m = parseInt(sleepParts[1]) - 30;
+  // Cálculo de la veda: exactamente 30 minutos antes de la hora de dormir
+  const sleepTimeStr = user.sleep_time || '23:00';
+  const wakeTimeStr = user.wake_time || '07:00';
+  const sleepParts = sleepTimeStr.split(':');
+  
+  let h = parseInt(sleepParts[0], 10);
+  let m = parseInt(sleepParts[1], 10) - 30;
   if (m < 0) {
     m += 60;
     h = (h - 1 + 24) % 24;
@@ -597,48 +600,39 @@ function renderAlarm(container) {
   container.innerHTML = `
     <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-4">
       <div>
-        <h2 class="text-base font-extrabold text-slate-800">Control de Sueño & Alarma</h2>
-        <p class="text-xs text-slate-400">Configura tus horas para el control automático de la meta Offline 30min.</p>
+        <h2 class="text-base font-extrabold text-slate-800">Control de Sueño & Horarios</h2>
+        <p class="text-xs text-slate-400">Configura tus horas para el registro automático de la meta Offline 30min.</p>
       </div>
 
-      <!-- Ventana de Desconexión Calculada -->
-      <div class="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200">
-        <span class="text-[11px] font-bold text-emerald-800 uppercase block mb-1">Ventana Offline Nocturna</span>
-        <div class="text-xs text-emerald-700">
-          No abras la app entre las <span class="font-extrabold">${offlineStartStr}</span> y las <span class="font-extrabold">${user.wake_time || '07:00'}</span> para ganar tu punto automático.
+      <!-- Recuadro informativo de la regla -->
+      <div class="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-1.5">
+        <div class="flex items-center space-x-1.5 text-emerald-800">
+          <span class="text-sm">🌙</span>
+          <span class="text-xs font-black uppercase tracking-wider">Regla de Desconexión</span>
         </div>
+        <p class="text-xs text-emerald-900 leading-relaxed">
+          Para ganar automáticamente el punto de <b>Off line 30min</b>, <u>no abras la aplicación</u> desde las <b>${offlineStartStr}</b> (30 minutos antes de tu hora de dormir a las ${sleepTimeStr}) hasta las <b>${wakeTimeStr}</b> (tu hora de despertar).
+        </p>
       </div>
 
-      <!-- Horas de Dormir y Despertar con Acceso Directo -->
+      <!-- Selectores de Horas -->
       <div class="grid grid-cols-2 gap-3">
-        <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex flex-col justify-between">
-          <div>
-            <label class="text-[11px] font-bold text-slate-500 block mb-1">Hora de Dormir</label>
-            <input type="time" id="alarmSleepInput" value="${user.sleep_time || '23:00'}" class="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400">
-          </div>
-          <span class="text-[10px] text-slate-400 mt-2 block">Punto de inicio veda</span>
+        <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+          <label class="text-[11px] font-bold text-slate-500 block mb-1">Hora de Dormir</label>
+          <input type="time" id="alarmSleepInput" value="${sleepTimeStr}" class="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+          <span class="text-[10px] text-slate-400 mt-1 block">Meta fija</span>
         </div>
 
-        <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-2">
-          <div>
-            <label class="text-[11px] font-bold text-slate-500 block mb-1">Despertar</label>
-            <input type="time" id="alarmWakeInput" value="${user.wake_time || '07:00'}" class="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400">
-          </div>
-
-          <!-- BOTÓN ACCESO DIRECTO AL RELOJ NATIVO -->
-          <button 
-            type="button"
-            onclick="openNativeClock()" 
-            class="w-full bg-sky-500 hover:bg-sky-600 active:scale-95 text-white py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center space-x-1 shadow-sm transition-all">
-            <span>⏰</span>
-            <span>Poner Alarma</span>
-          </button>
+        <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+          <label class="text-[11px] font-bold text-slate-500 block mb-1">Hora de Despertar</label>
+          <input type="time" id="alarmWakeInput" value="${wakeTimeStr}" class="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+          <span class="text-[10px] text-slate-400 mt-1 block">Fin de veda</span>
         </div>
       </div>
 
-      <!-- Días de la semana -->
+      <!-- Días Activos -->
       <div>
-        <label class="text-[11px] font-bold text-slate-500 block mb-2">Días Activos</label>
+        <label class="text-[11px] font-bold text-slate-500 block mb-2">Días que aplica esta regla</label>
         <div class="grid grid-cols-7 gap-1.5" id="alarmDaysGrid">
           ${days.map((d, idx) => {
             const isSel = activeDays.includes(idx);
@@ -658,12 +652,11 @@ function renderAlarm(container) {
       <div id="alarmMsg" class="text-xs font-semibold text-center hidden"></div>
 
       <button onclick="saveAlarmSettings()" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 py-3 rounded-xl font-bold text-white text-sm shadow-md shadow-emerald-200 transition-all">
-        Guardar Configuración
+        Guardar Horarios
       </button>
     </div>
   `;
 }
-
 // FUNCIÓN PARA ABRIR EL RELOJ NATIVO DEL CELULAR
 function openNativeClock() {
   const wakeVal = document.getElementById('alarmWakeInput').value || '07:00';
