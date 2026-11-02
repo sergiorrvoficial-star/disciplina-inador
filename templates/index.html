@@ -668,20 +668,42 @@ function renderAlarm(container) {
 function openNativeClock() {
   const wakeVal = document.getElementById('alarmWakeInput').value || '07:00';
   const [hour, minute] = wakeVal.split(':');
-  const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-  if (/android/i.test(userAgent)) {
-    // Android Intent directo para configurar alarma en la app de Reloj
-    window.location.href = `intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.hour=${parseInt(hour)};i.android.intent.extra.minutes=${parseInt(minute)};S.android.intent.extra.message=Disciplina-Inador;end`;
-  } else if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
-    // En iOS abre la app de reloj del sistema o app de atajos
-    window.location.href = 'clock-alarm://';
+  if (isAndroid) {
+    // 1. Intent estándar de alarma de Android
+    const intentUri = `intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.hour=${parseInt(hour, 10)};i.android.intent.extra.minutes=${parseInt(minute, 10)};S.android.intent.extra.message=Disciplina-Inador;B.android.intent.extra.SKIP_UI=false;end`;
+    
+    // Crear un enlace temporal e invocar click nativo para evitar bloqueo de popups
+    const a = document.createElement('a');
+    a.href = intentUri;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // Fallback: Si no abre en 1 segundo, intentar abrir la app de Reloj genérica
     setTimeout(() => {
-      // Si el esquema anterior está bloqueado en esa versión de iOS, abre la app de reloj directamente
-      window.location.href = 'shortcuts://';
-    }, 400);
+      const fallbackA = document.createElement('a');
+      fallbackA.href = 'intent:#Intent;action=android.intent.action.SHOW_ALARMS;end';
+      document.body.appendChild(fallbackA);
+      fallbackA.click();
+      document.body.removeChild(fallbackA);
+    }, 800);
+
+  } else if (isIOS) {
+    // En iPhone/iPad abre la app Atajos para configurar alarmas
+    const a = document.createElement('a');
+    a.href = 'shortcuts://';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setTimeout(() => {
+      alert(`Hora establecida a las ${wakeVal}. Si no abrió automáticamente, abre la app Reloj en tu iPhone para confirmarla.`);
+    }, 1000);
   } else {
-    alert(`Hora configurada para las ${wakeVal}. Abre tu aplicación de reloj para confirmarla.`);
+    alert(`Hora fijada a las ${wakeVal}. Configúrala en el reloj de tu sistema.`);
   }
 }
     let currentAlarmDays = null;
