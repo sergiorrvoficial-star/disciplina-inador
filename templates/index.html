@@ -541,9 +541,12 @@
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm cursor-pointer hover:border-emerald-200 transition-all" onclick="editTargetPrompt()">
           <div class="flex justify-between text-xs mb-1.5 font-bold">
-            <span class="text-slate-500">Meta Semanal</span>
+            <div class="flex items-center space-x-1">
+              <span class="text-slate-500">Meta Semanal</span>
+              <span class="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">✏️ editar</span>
+            </div>
             <span class="text-emerald-600">${user.balance} / ${user.target} pts</span>
           </div>
           <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
@@ -745,7 +748,30 @@ function openNativeClock() {
         msgBox.textContent = 'Error al guardar horarios';
       }
     }
+async function editTargetPrompt() {
+  const currentTarget = globalData.user.target || 15;
+  const newTargetStr = prompt("Ingresa tu nueva meta semanal de puntos:", currentTarget);
+  
+  if (newTargetStr === null) return;
+  const newTarget = parseInt(newTargetStr, 10);
+  
+  if (isNaN(newTarget) || newTarget <= 0) {
+    alert("Por favor ingresa un número válido mayor a 0");
+    return;
+  }
 
+  const res = await fetch('/api/update-target', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: currentUser, target: newTarget })
+  });
+
+  if (res.ok) {
+    loadState();
+  } else {
+    alert("Error al actualizar la meta");
+  }
+}
     async function toggleTask(taskId) {
       const res = await fetch('/api/toggle-task', {
         method: 'POST',

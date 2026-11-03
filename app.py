@@ -485,6 +485,25 @@ def get_leaderboard():
     leaderboard.sort(key=lambda x: x['score'], reverse=True)
 
     return jsonify(leaderboard)
+@app.route('/api/update-target', methods=['POST'])
+def update_target():
+    payload = request.json
+    user_id = payload.get('user_id')
+    new_target = payload.get('target')
+
+    data = load_data()
+    if user_id not in data['users']:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    try:
+        val = int(new_target)
+        if val <= 0:
+            return jsonify({"error": "La meta debe ser mayor a 0"}), 400
+        data['users'][user_id]['target'] = val
+        save_data(data)
+        return jsonify({"success": True, "new_target": val})
+    except (ValueError, TypeError):
+        return jsonify({"error": "Valor no válido"}), 400
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
