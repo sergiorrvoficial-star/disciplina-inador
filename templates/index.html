@@ -866,7 +866,7 @@ async function deleteTaskPrompt(id, name) {
 
         ${renderDidacticCalendar()}
 
-       <!-- Barra con título y botones de Editar / + -->
+            <!-- Barra con título y botones de Editar / + -->
             <div class="flex items-center justify-between mb-3 px-1 mt-4">
                 <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Metas Diarias</span>
                 <div class="flex items-center space-x-2">
@@ -881,53 +881,9 @@ async function deleteTaskPrompt(id, name) {
                 </div>
             </div>
 
-            <!-- Contenedor dinámico que se refresca al instante -->
+            <!-- Contenedor único que cambia dinámicamente -->
             <div id="tasks-dynamic-list-container">
                 ${renderTasksListHTML()}
-            </div>
-
-            <div class="space-y-2.5">
-                ${(globalData.tasks || []).map(t => {
-                    const done = (globalData.completed_today || []).includes(t.id);
-                    const taskStreak = (globalData.task_streaks || {})[t.id] || 0;
-
-                    if (isEditingTasksMode) {
-                        return `
-                            <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
-                                <div class="flex-1 pr-2">
-                                    <div class="font-bold text-sm text-slate-800">${t.name}</div>
-                                    <div class="text-xs text-emerald-600 font-semibold">${t.points} pts</div>
-                                </div>
-                                <div class="flex items-center space-x-1.5">
-                                    <button type="button" onclick="openEditTaskModal('${t.id}', '${escapeQuotes(t.name)}', ${t.points})" 
-                                            class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition">
-                                        ✏️
-                                    </button>
-                                    <button type="button" onclick="deleteTaskPrompt('${t.id}', '${escapeQuotes(t.name)}')" 
-                                            class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold transition">
-                                        🗑️
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }
-
-                    return `
-                        <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
-                            <div>
-                                <div class="flex items-center space-x-1.5">
-                                    <span class="font-bold text-sm ${done ? 'line-through text-slate-400' : 'text-slate-800'}">${t.name}</span>
-                                    ${taskStreak >= 2 ? `<span class="text-xs font-bold text-amber-500">🔥${taskStreak}</span>` : ''}
-                                </div>
-                                <div class="text-xs text-emerald-600 font-semibold">+${t.points} pts</div>
-                            </div>
-                            <button type="button" onclick="toggleTask('${t.id}')"
-                                    class="px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm ${done ? 'bg-slate-100 text-slate-400 border border-slate-200' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}">
-                                ${done ? 'Listo ✓' : 'Completar'}
-                            </button>
-                        </div>
-                    `;
-                }).join('')}
             </div>
 
             <!-- Modal para agregar / editar metas -->
@@ -959,8 +915,10 @@ async function deleteTaskPrompt(id, name) {
                     </div>
                 </div>
             </div>
-      `;
-    }
+        </div>
+    \`;
+}
+
 // --- PESTAÑA ALARM (SIN BOTÓN NATIVO, MENSAJE CLARO) ---
 function renderAlarm(container) {
   const user = globalData.user;
