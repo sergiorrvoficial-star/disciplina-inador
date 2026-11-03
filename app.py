@@ -682,5 +682,61 @@ def get_day_details():
         "total_tasks": len(data.get('tasks', [])),
         "bonus_all_completed": had_bonus
     })
+@app.route('/api/manage-task', methods=['POST'])
+def manage_task():
+    payload = request.json or {}
+    action = payload.get('action') # 'add', 'edit', 'delete'
+    task_id = payload.get('task_id')
+    name = (payload.get('name') or '').strip()
+    points = payload.get('points')
+
+    data = load_data()
+    if 'tasks' not in data:
+        data['tasks'] = []
+
+    if action == 'add':
+        if not name:
+            return jsonify({"error": "El nombre de la meta es obligatorio"}), 400
+        try:
+            pts = int(points)
+            if pts <= 0:
+                return jsonify({"error": "Los puntos deben ser mayores a 0"}), 400
+        except (ValueError, TypeError):
+            return jsonify({"error": "Puntos no válidos"}), 400
+
+        new_id = f"t{int(datetime.now().timestamp() * 1000)}"
+        data['tasks'].append({
+            "id": new_id,
+            "name": name,
+            "points": pts
+        })
+        save_data(data)
+        return jsonify({"success": True, "tasks": data['tasks']})
+
+    elif action == 'edit':
+        task = next((t for t in data['tasks'] if t['id'] == task_id), None)
+        if not task:
+            return jsonify({"error": "Meta no encontrada"}), 404
+        if name:
+            task['name'] = name
+        if points is not None:
+            try:
+                pts = int(points)
+                if pts <= 0:
+                    return jsonify({"error": "Los puntos deben ser mayores a 0"}), 400
+                task['points'] = pts
+            except (ValueError, TypeError):
+                return jsonify({"error": "Puntos no válidos"}), 400
+
+        save_data(data)
+        return jsonify({"success": True, "tasks": data['tasks']})
+
+    elif action == 'delete':
+        data['tasks'] = [t for t in data['tasks'] if t['id'] != task_id]
+        save_data(data)
+        return jsonify({"success": True, "tasks": data['tasks']})
+
+    return jsonify({"error": "Acción no válida"}), 400
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

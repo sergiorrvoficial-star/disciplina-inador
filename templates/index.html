@@ -421,11 +421,11 @@ function handleCalTouchEnd(e) {
 
 function handleCalSwipe() {
     const diff = touchEndX - touchStartX;
-    if (Math.abs(diff) < 40) return; // Umbral mínimo de deslizamiento
+    if (Math.abs(diff) < 35) return;
     if (diff < 0) {
-        shiftCal(1);  // Deslizar a la izquierda: siguiente mes/semana/día
+        shiftCal(1);  // Deslizar izquierda -> siguiente
     } else {
-        shiftCal(-1); // Deslizar a la derecha: mes/semana/día anterior
+        shiftCal(-1); // Deslizar derecha -> anterior
     }
 }
 
@@ -438,30 +438,40 @@ function shiftCal(delta) {
         calCurrentDate.setDate(calCurrentDate.getDate() + delta);
         calSelectedDate = calCurrentDate.toISOString().split('T')[0];
     }
-    refreshCalUI();
+    refreshCalComponent();
 }
 
 function resetCalToToday() {
     calCurrentDate = new Date();
     calSelectedDate = calCurrentDate.toISOString().split('T')[0];
-    refreshCalUI();
+    refreshCalComponent();
 }
 
 function setCalMode(mode) {
     calCurrentMode = mode;
-    refreshCalUI();
+    refreshCalComponent();
 }
 
 function selectCalDay(dateStr) {
     calSelectedDate = dateStr;
-    refreshCalUI();
+    refreshCalComponent();
     inspectCalDay(dateStr);
 }
 
-function refreshCalUI() {
-    const container = document.getElementById('tab-content');
-    if (container && currentTab === 'tasks') {
-        renderTasks(container);
+// Reemplazo directo en el DOM para actualizar al milisegundo
+function refreshCalComponent() {
+    const wrapper = document.getElementById('cal-wrapper-mount');
+    if (wrapper) {
+        wrapper.outerHTML = renderDidacticCalendar();
+    } else {
+        // Fallback si no encuentra el wrapper
+        const container = document.getElementById('tab-content');
+        if (container && typeof renderTasks === 'function') {
+            renderTasks(container);
+        }
+    }
+    if (calSelectedDate) {
+        inspectCalDay(calSelectedDate);
     }
 }
 
@@ -484,7 +494,7 @@ async function inspectCalDay(dateStr) {
     try {
         const res = await fetch(`/api/day-details?user=${encodeURIComponent(uid)}&date=${dateStr}`);
         if (!res.ok) {
-            content.innerHTML = `<span class="text-slate-400 text-xs">Sin registros para esta fecha.</span>`;
+            content.innerHTML = `<span class="text-slate-400 text-xs">Sin actividad registrada.</span>`;
             return;
         }
         const data = await res.json();
@@ -525,7 +535,6 @@ function renderDidacticCalendar() {
 
     let gridHtml = '';
 
-    // En modo 'day', no se muestra cuadrícula; solo indicador de fecha
     if (calCurrentMode === 'day') {
         const dStr = calCurrentDate.toISOString().split('T')[0];
         gridHtml = `
@@ -536,7 +545,7 @@ function renderDidacticCalendar() {
         `;
     } else if (calCurrentMode === 'month') {
         const firstDay = new Date(y, m, 1).getDay();
-        const offset = (firstDay + 6) % 7; // Lunes = 0
+        const offset = (firstDay + 6) % 7;
         const daysInMonth = new Date(y, m + 1, 0).getDate();
 
         gridHtml += `
@@ -552,8 +561,8 @@ function renderDidacticCalendar() {
             const dStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const isToday = (dStr === todayStr);
             const isSel = (dStr === calSelectedDate);
-            const isPerfect = globalData.perfect_days && globalData.perfect_days.includes(dStr);
-            const isActive = globalData.active_days && globalData.active_days.includes(dStr);
+            const isPerfect = typeof globalData !== 'undefined' && globalData.perfect_days && globalData.perfect_days.includes(dStr);
+            const isActive = typeof globalData !== 'undefined' && globalData.active_days && globalData.active_days.includes(dStr);
 
             let bg = "bg-slate-50 text-slate-700 hover:bg-slate-100";
             if (isPerfect) bg = "bg-emerald-500 text-white font-bold shadow-sm";
@@ -588,8 +597,8 @@ function renderDidacticCalendar() {
             const dStr = dObj.toISOString().split('T')[0];
             const isToday = (dStr === todayStr);
             const isSel = (dStr === calSelectedDate);
-            const isPerfect = globalData.perfect_days && globalData.perfect_days.includes(dStr);
-            const isActive = globalData.active_days && globalData.active_days.includes(dStr);
+            const isPerfect = typeof globalData !== 'undefined' && globalData.perfect_days && globalData.perfect_days.includes(dStr);
+            const isActive = typeof globalData !== 'undefined' && globalData.active_days && globalData.active_days.includes(dStr);
 
             let bg = "bg-slate-50 text-slate-700 hover:bg-slate-100";
             if (isPerfect) bg = "bg-emerald-500 text-white font-bold shadow-sm";
@@ -608,36 +617,124 @@ function renderDidacticCalendar() {
     }
 
     return `
-        <div id="cal-swipe-area" 
-             ontouchstart="handleCalTouchStart(event)" 
-             ontouchend="handleCalTouchEnd(event)" 
-             class="bg-white border border-slate-200 rounded-2xl p-4 mb-4 shadow-sm select-none">
-            
-            <div class="flex items-center justify-between mb-3">
-                <button type="button" onclick="resetCalToToday()" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-sm">
-                    Hoy
-                </button>
+        <div id="cal-wrapper-mount">
+            <div id="cal-swipe-area" 
+                 ontouchstart="handleCalTouchStart(event)" 
+                 ontouchend="handleCalTouchEnd(event)" 
+                 class="bg-white border border-slate-200 rounded-2xl p-4 mb-4 shadow-sm select-none">
                 
-                <div class="text-sm font-bold text-slate-800 tracking-wide">
-                    ${months[m]} ${y}
+                <div class="flex items-center justify-between mb-3">
+                    <button type="button" onclick="resetCalToToday()" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-sm">
+                        Hoy
+                    </button>
+                    
+                    <div class="text-sm font-bold text-slate-800 tracking-wide">
+                        ${months[m]} ${y}
+                    </div>
+                    
+                    <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                        <button type="button" onclick="setCalMode('day')" class="px-2.5 py-1 text-xs rounded-md transition ${calCurrentMode === 'day' ? 'bg-white text-slate-800 font-bold shadow-sm' : 'text-slate-500'}">Día</button>
+                        <button type="button" onclick="setCalMode('week')" class="px-2.5 py-1 text-xs rounded-md transition ${calCurrentMode === 'week' ? 'bg-white text-slate-800 font-bold shadow-sm' : 'text-slate-500'}">Sem</button>
+                        <button type="button" onclick="setCalMode('month')" class="px-2.5 py-1 text-xs rounded-md transition ${calCurrentMode === 'month' ? 'bg-white text-slate-800 font-bold shadow-sm' : 'text-slate-500'}">Mes</button>
+                    </div>
                 </div>
-                
-                <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                    <button type="button" onclick="setCalMode('day')" class="px-2.5 py-1 text-xs rounded-md transition ${calCurrentMode === 'day' ? 'bg-white text-slate-800 font-bold shadow-sm' : 'text-slate-500'}">Día</button>
-                    <button type="button" onclick="setCalMode('week')" class="px-2.5 py-1 text-xs rounded-md transition ${calCurrentMode === 'week' ? 'bg-white text-slate-800 font-bold shadow-sm' : 'text-slate-500'}">Sem</button>
-                    <button type="button" onclick="setCalMode('month')" class="px-2.5 py-1 text-xs rounded-md transition ${calCurrentMode === 'month' ? 'bg-white text-slate-800 font-bold shadow-sm' : 'text-slate-500'}">Mes</button>
+
+                ${gridHtml}
+
+                <div id="cal-inspect-panel" class="mt-3 pt-3 border-t border-slate-100 ${calSelectedDate ? '' : 'hidden'}">
+                    <div id="cal-inspect-label" class="text-xs font-bold text-slate-700 mb-2">Metas del ${calSelectedDate}</div>
+                    <div id="cal-inspect-content"></div>
                 </div>
-            </div>
-
-            ${gridHtml}
-
-            <!-- Panel de metas del día seleccionado -->
-            <div id="cal-inspect-panel" class="mt-3 pt-3 border-t border-slate-100 ${calSelectedDate ? '' : 'hidden'}">
-                <div id="cal-inspect-label" class="text-xs font-bold text-slate-700 mb-2">Metas del ${calSelectedDate}</div>
-                <div id="cal-inspect-content"></div>
             </div>
         </div>
     `;
+}
+let isEditingTasksMode = false;
+
+function toggleEditTasksMode() {
+    isEditingTasksMode = !isEditingTasksMode;
+    const container = document.getElementById('tab-content');
+    if (container && currentTab === 'tasks') {
+        renderTasks(container);
+    }
+}
+
+function escapeQuotes(str) {
+    return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+function openAddTaskModal() {
+    document.getElementById('task-modal-title').innerText = "Nueva Meta";
+    document.getElementById('task-modal-id').value = "";
+    document.getElementById('task-modal-name').value = "";
+    document.getElementById('task-modal-points').value = "1";
+    document.getElementById('task-modal').classList.remove('hidden');
+}
+
+function openEditTaskModal(id, name, points) {
+    document.getElementById('task-modal-title').innerText = "Editar Meta";
+    document.getElementById('task-modal-id').value = id;
+    document.getElementById('task-modal-name').value = name;
+    document.getElementById('task-modal-points').value = points;
+    document.getElementById('task-modal').classList.remove('hidden');
+}
+
+function closeTaskModal() {
+    document.getElementById('task-modal').classList.add('hidden');
+}
+
+async function submitTaskModal() {
+    const id = document.getElementById('task-modal-id').value;
+    const name = document.getElementById('task-modal-name').value.trim();
+    const points = parseInt(document.getElementById('task-modal-points').value);
+
+    if (!name || isNaN(points) || points <= 0) {
+        alert("Ingresa un nombre y una cantidad válida de puntos.");
+        return;
+    }
+
+    const action = id ? 'edit' : 'add';
+
+    try {
+        const res = await fetch('/api/manage-task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, task_id: id, name, points })
+        });
+        const data = await res.json();
+        if (data.success) {
+            globalData.tasks = data.tasks;
+            closeTaskModal();
+            const container = document.getElementById('tab-content');
+            if (container) renderTasks(container);
+        } else {
+            alert(data.error || "Error al procesar la meta.");
+        }
+    } catch (e) {
+        alert("Error de conexión al guardar la meta.");
+    }
+}
+
+async function deleteTaskPrompt(id, name) {
+    if (!confirm(`¿Deseas eliminar la meta "${name}"?`)) return;
+
+    try {
+        const res = await fetch('/api/manage-task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', task_id: id })
+        });
+        const data = await res.json();
+        if (data.success) {
+            globalData.tasks = data.tasks;
+            const container = document.getElementById('tab-content');
+            if (container) renderTasks(container);
+        } else {
+            alert(data.error || "Error al eliminar la meta.");
+        }
+    } catch (e) {
+        alert("Error de conexión al eliminar la meta.");
+    }
 }
 
     function renderTasks(container) {
@@ -698,29 +795,94 @@ function renderDidacticCalendar() {
 
         ${renderDidacticCalendar()}
 
-        <div class="space-y-2.5">
-          ${globalData.tasks.map(t => {
-            const done = globalData.completed_today.includes(t.id);
-            const taskStreak = (globalData.task_streaks && globalData.task_streaks[t.id]) || 0;
-            
-            return `
-              <div class="flex items-center justify-between p-3.5 bg-white rounded-2xl border ${done ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-100 shadow-sm'}">
-                <div>
-                  <div class="flex items-center space-x-1.5">
-                    <span class="font-bold text-sm ${done ? 'line-through text-slate-400' : 'text-slate-700'}">${t.name}</span>
-                    ${taskStreak >= 2 ? `<img src="/static/naranja.png" class="w-3.5 h-3.5 object-contain" title="Racha de ${taskStreak} días">` : ''}
-                  </div>
-                  <div class="text-xs text-emerald-600 font-extrabold">+${t.points} pts</div>
+       <!-- Barra con título y botones de Editar / + -->
+            <div class="flex items-center justify-between mb-3 px-1 mt-4">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Metas Diarias</span>
+                <div class="flex items-center space-x-2">
+                    <button type="button" onclick="toggleEditTasksMode()" 
+                            class="px-2.5 py-1 text-xs font-bold rounded-lg transition ${isEditingTasksMode ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}">
+                        ${isEditingTasksMode ? 'Terminar' : 'Editar'}
+                    </button>
+                    <button type="button" onclick="openAddTaskModal()" 
+                            class="w-7 h-7 flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow-sm transition">
+                        +
+                    </button>
                 </div>
-                <button 
-                  onclick="toggleTask('${t.id}')" 
-                  class="px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${done ? 'bg-slate-200 text-slate-600 hover:bg-rose-100 hover:text-rose-600' : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-200'}">
-                  ${done ? 'Listo ✓' : 'Completar'}
-                </button>
-              </div>
-            `;
-          }).join('')}
-        </div>
+            </div>
+
+            <div class="space-y-2.5">
+                ${(globalData.tasks || []).map(t => {
+                    const done = (globalData.completed_today || []).includes(t.id);
+                    const taskStreak = (globalData.task_streaks || {})[t.id] || 0;
+
+                    if (isEditingTasksMode) {
+                        return `
+                            <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                                <div class="flex-1 pr-2">
+                                    <div class="font-bold text-sm text-slate-800">${t.name}</div>
+                                    <div class="text-xs text-emerald-600 font-semibold">${t.points} pts</div>
+                                </div>
+                                <div class="flex items-center space-x-1.5">
+                                    <button type="button" onclick="openEditTaskModal('${t.id}', '${escapeQuotes(t.name)}', ${t.points})" 
+                                            class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition">
+                                        ✏️
+                                    </button>
+                                    <button type="button" onclick="deleteTaskPrompt('${t.id}', '${escapeQuotes(t.name)}')" 
+                                            class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold transition">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    return `
+                        <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                            <div>
+                                <div class="flex items-center space-x-1.5">
+                                    <span class="font-bold text-sm ${done ? 'line-through text-slate-400' : 'text-slate-800'}">${t.name}</span>
+                                    ${taskStreak >= 2 ? `<span class="text-xs font-bold text-amber-500">🔥${taskStreak}</span>` : ''}
+                                </div>
+                                <div class="text-xs text-emerald-600 font-semibold">+${t.points} pts</div>
+                            </div>
+                            <button type="button" onclick="toggleTask('${t.id}')"
+                                    class="px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm ${done ? 'bg-slate-100 text-slate-400 border border-slate-200' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}">
+                                ${done ? 'Listo ✓' : 'Completar'}
+                            </button>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+
+            <!-- Modal para agregar / editar metas -->
+            <div id="task-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+                <div class="bg-white border border-slate-200 rounded-2xl p-5 w-full max-w-sm shadow-xl">
+                    <h3 id="task-modal-title" class="text-base font-bold text-slate-800 mb-3">Nueva Meta</h3>
+                    <input type="hidden" id="task-modal-id" value="">
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 mb-1">Nombre de la meta</label>
+                            <input type="text" id="task-modal-name" placeholder="Ej. Preparar la ropa" 
+                                   class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 mb-1">Puntos otorgados</label>
+                            <input type="number" id="task-modal-points" placeholder="Ej. 2" min="1" value="1"
+                                   class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-end space-x-2 mt-5">
+                        <button type="button" onclick="closeTaskModal()" 
+                                class="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 transition">
+                            Cancelar
+                        </button>
+                        <button type="button" onclick="submitTaskModal()" 
+                                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition">
+                            Guardar
+                        </button>
+                    </div>
+                </div>
+            </div>
       `;
     }
 // --- PESTAÑA ALARM (SIN BOTÓN NATIVO, MENSAJE CLARO) ---
