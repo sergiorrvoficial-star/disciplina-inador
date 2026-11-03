@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, time
 import json
 import os
 import psycopg2
+from supabase import create_client, Client
 
 app = Flask(__name__)
 DATA_FILE = 'data.json'
@@ -11,6 +12,52 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
+
+supabase: Client = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print(f"Error inicializando cliente Supabase: {e}")
+
+def upload_avatar_to_storage(file, username):
+    """Sube el avatar a Supabase Storage y retorna la URL pública; si falla, usa el disco local."""
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ['.jpg', '.jpeg', '.png', '.webp', '.heic']:
+        return None
+
+    filename = f"avatar_{username}{ext}"
+    content_type_map = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.webp': 'image/webp',
+        '.heic': 'image/heic'
+    }
+    content_type = content_type_map.get(ext, 'image/jpeg')
+
+    if supabase:
+        try:
+            file_bytes = file.read()
+            # Subir o sobrescribir si ya existe
+            supabase.storage.from_("avatars").upload(
+                file=file_bytes,
+                path=filename,
+                file_options={"upsert": "true", "content-type": content_type}
+            )
+            public_url = supabase.storage.from_("avatars").get_public_url(filename)
+            # Agregar timestamp para evitar caché agresiva en navegador
+            return f"{public_url}?t={int(datetime.now().timestamp())}"
+        except Exception as e:
+            print(f"Error subiendo avatar a Supabase Storage: {e}")
+
+    # Fallback local en caso de estar en desarrollo
+    file.seek(0)
+    local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(local_path)
+    return f"/static/avatars/{filename}"
 
 def get_db_connection():
     if not DATABASE_URL:
@@ -34,7 +81,6 @@ def init_db():
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
                 """)
-                # Inicializar fila si no existe
                 cur.execute("SELECT id FROM app_storage WHERE id = 1;")
                 if not cur.fetchone():
                     initial_content = {
@@ -265,12 +311,9 @@ def register():
     if 'avatar' in request.files:
         file = request.files['avatar']
         if file and file.filename != '':
-            ext = os.path.splitext(file.filename)[1].lower()
-            if ext in ['.jpg', '.jpeg', '.png', '.webp', '.heic']:
-                filename = f"avatar_{username}{ext}"
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
-                avatar_path = f"/static/avatars/{filename}"
+            uploaded_url = upload_avatar_to_storage(file, username)
+            if uploaded_url:
+                avatar_path = uploaded_url
 
     data['users'][username] = {
         "name": nickname,
@@ -380,12 +423,9 @@ def update_profile():
     if 'avatar' in request.files:
         file = request.files['avatar']
         if file and file.filename != '':
-            ext = os.path.splitext(file.filename)[1].lower()
-            if ext in ['.jpg', '.jpeg', '.png', '.webp', '.heic']:
-                filename = f"avatar_{target_user_id}{ext}"
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
-                data['users'][target_user_id]['avatar'] = f"/static/avatars/{filename}"
+            uploaded_url = upload_avatar_to_storage(file, target_user_id)
+            if uploaded_url:
+                data['users'][target_user_id]['avatar'] = uploaded_url
 
     save_data(data)
     return jsonify({
