@@ -649,6 +649,38 @@ def get_leaderboard():
     leaderboard.sort(key=lambda x: x['score'], reverse=True)
 
     return jsonify(leaderboard)
-
+@app.route('/api/day-details', methods=['GET'])
+def get_day_details():
+    user_id = request.args.get('user', '').strip()
+    target_date = request.args.get('date', '').strip()
+    
+    data = load_data()
+    if user_id not in data['users']:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+        
+    user_logs = [
+        log for log in data['task_logs']
+        if log['user_id'] == user_id and log['date'] == target_date
+    ]
+    
+    completed_task_ids = [log['task_id'] for log in user_logs if log['task_id'] != 'bonus_all_completed']
+    had_bonus = any(log['task_id'] == 'bonus_all_completed' for log in user_logs)
+    
+    task_details = []
+    for t in data.get('tasks', []):
+        task_details.append({
+            "id": t['id'],
+            "name": t['name'],
+            "points": t['points'],
+            "completed": t['id'] in completed_task_ids
+        })
+        
+    return jsonify({
+        "date": target_date,
+        "tasks": task_details,
+        "completed_count": len(completed_task_ids),
+        "total_tasks": len(data.get('tasks', [])),
+        "bonus_all_completed": had_bonus
+    })
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
