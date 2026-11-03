@@ -916,7 +916,7 @@ async function deleteTaskPrompt(id, name) {
                 </div>
             </div>
         </div>
-    \`;
+    `;
 }
 
 // --- PESTAÑA ALARM (SIN BOTÓN NATIVO, MENSAJE CLARO) ---
@@ -936,10 +936,11 @@ function renderAlarm(container) {
     m += 60;
     h = (h - 1 + 24) % 24;
   }
-  const offlineStartStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    const offlineStartStr = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
 
-  container.innerHTML = `
-    <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+    container.innerHTML = `
+        <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+
       <div>
         <h2 class="text-base font-extrabold text-slate-800">Control de Sueño & Horarios</h2>
         <p class="text-xs text-slate-400">Configura tus horas para el registro automático de la meta Offline 30min.</p>
