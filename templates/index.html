@@ -653,10 +653,83 @@ let isEditingTasksMode = false;
 
 function toggleEditTasksMode() {
     isEditingTasksMode = !isEditingTasksMode;
-    const container = document.getElementById('tab-content');
-    if (container && currentTab === 'tasks') {
-        renderTasks(container);
+    refreshTasksListUI();
+}
+
+function refreshTasksListUI() {
+    const listContainer = document.getElementById('tasks-dynamic-list-container');
+    const toggleBtn = document.getElementById('btn-toggle-edit-tasks');
+    
+    if (toggleBtn) {
+        toggleBtn.innerText = isEditingTasksMode ? 'Terminar' : 'Editar';
+        toggleBtn.className = `px-2.5 py-1 text-xs font-bold rounded-lg transition ${
+            isEditingTasksMode 
+                ? 'bg-amber-100 text-amber-700 border border-amber-300' 
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+        }`;
     }
+
+    if (listContainer) {
+        listContainer.innerHTML = renderTasksListHTML();
+    } else {
+        // Respaldo en caso de que no encuentre el ID específico
+        const tabContent = document.getElementById('tab-content') || document.querySelector('main');
+        if (tabContent && typeof renderTasks === 'function') {
+            renderTasks(tabContent);
+        }
+    }
+}
+
+function renderTasksListHTML() {
+    const tasks = globalData.tasks || [];
+    const completedToday = globalData.completed_today || [];
+    const taskStreaks = globalData.task_streaks || {};
+
+    if (tasks.length === 0) {
+        return '<div class="text-center py-6 text-xs text-slate-400">No hay metas configuradas. Presiona + para agregar una.</div>';
+    }
+
+    return tasks.map(t => {
+        const done = completedToday.includes(t.id);
+        const taskStreak = taskStreaks[t.id] || 0;
+
+        if (isEditingTasksMode) {
+            return `
+                <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm mb-2.5">
+                    <div class="flex-1 pr-2">
+                        <div class="font-bold text-sm text-slate-800">${t.name}</div>
+                        <div class="text-xs text-emerald-600 font-semibold">${t.points} pts</div>
+                    </div>
+                    <div class="flex items-center space-x-1.5">
+                        <button type="button" onclick="openEditTaskModal('${t.id}', '${escapeQuotes(t.name)}', ${t.points})" 
+                                class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition">
+                            ✏️
+                        </button>
+                        <button type="button" onclick="deleteTaskPrompt('${t.id}', '${escapeQuotes(t.name)}')" 
+                                class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold transition">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm mb-2.5">
+                <div>
+                    <div class="flex items-center space-x-1.5">
+                        <span class="font-bold text-sm ${done ? 'line-through text-slate-400' : 'text-slate-800'}">${t.name}</span>
+                        ${taskStreak >= 2 ? `<span class="text-xs font-bold text-amber-500">🔥${taskStreak}</span>` : ''}
+                    </div>
+                    <div class="text-xs text-emerald-600 font-semibold">+${t.points} pts</div>
+                </div>
+                <button type="button" onclick="toggleTask('${t.id}')"
+                        class="px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm ${done ? 'bg-slate-100 text-slate-400 border border-slate-200' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}">
+                    ${done ? 'Listo ✓' : 'Completar'}
+                </button>
+            </div>
+        `;
+    }).join('');
 }
 
 function escapeQuotes(str) {
@@ -705,8 +778,7 @@ async function submitTaskModal() {
         if (data.success) {
             globalData.tasks = data.tasks;
             closeTaskModal();
-            const container = document.getElementById('tab-content');
-            if (container) renderTasks(container);
+            refreshTasksListUI();
         } else {
             alert(data.error || "Error al procesar la meta.");
         }
@@ -727,8 +799,7 @@ async function deleteTaskPrompt(id, name) {
         const data = await res.json();
         if (data.success) {
             globalData.tasks = data.tasks;
-            const container = document.getElementById('tab-content');
-            if (container) renderTasks(container);
+            refreshTasksListUI();
         } else {
             alert(data.error || "Error al eliminar la meta.");
         }
@@ -799,7 +870,7 @@ async function deleteTaskPrompt(id, name) {
             <div class="flex items-center justify-between mb-3 px-1 mt-4">
                 <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Metas Diarias</span>
                 <div class="flex items-center space-x-2">
-                    <button type="button" onclick="toggleEditTasksMode()" 
+                    <button type="button" id="btn-toggle-edit-tasks" onclick="toggleEditTasksMode()" 
                             class="px-2.5 py-1 text-xs font-bold rounded-lg transition ${isEditingTasksMode ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}">
                         ${isEditingTasksMode ? 'Terminar' : 'Editar'}
                     </button>
@@ -808,6 +879,11 @@ async function deleteTaskPrompt(id, name) {
                         +
                     </button>
                 </div>
+            </div>
+
+            <!-- Contenedor dinámico que se refresca al instante -->
+            <div id="tasks-dynamic-list-container">
+                ${renderTasksListHTML()}
             </div>
 
             <div class="space-y-2.5">
