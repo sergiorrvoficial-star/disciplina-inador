@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 from datetime import datetime, timedelta, time
 import json
 import os
+import psycopg2
 
 app = Flask(__name__)
 DATA_FILE = 'data.json'
@@ -9,9 +10,105 @@ UPLOAD_FOLDER = os.path.join('static', 'avatars')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+def get_db_connection():
+    if not DATABASE_URL:
+        return None
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    except Exception as e:
+        print(f"Error conectando a PostgreSQL: {e}")
+        return None
+
+def init_db():
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS app_storage (
+                        id INT PRIMARY KEY,
+                        content JSONB NOT NULL,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                # Inicializar fila si no existe
+                cur.execute("SELECT id FROM app_storage WHERE id = 1;")
+                if not cur.fetchone():
+                    initial_content = {
+                        "users": {},
+                        "tasks": [
+                            {"id": "t1", "name": "Tomar 2L de agua", "points": 1},
+                            {"id": "t2", "name": "Ejercicio 30min", "points": 2},
+                            {"id": "t3", "name": "Off line 30min", "points": 1},
+                            {"id": "t4", "name": "Lectura 15min", "points": 1}
+                        ],
+                        "rewards": [
+                            {"id": "r1", "name": "Comida chatarra libre", "cost": 10},
+                            {"id": "r2", "name": "Día de descanso total", "cost": 15}
+                        ],
+                        "task_logs": [],
+                        "redemptions": [],
+                        "cheats": []
+                    }
+                    if os.path.exists(DATA_FILE):
+                        try:
+                            with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                                file_data = json.load(f)
+                                if file_data.get('tasks'):
+                                    initial_content = file_data
+                        except Exception:
+                            pass
+                    cur.execute(
+                        "INSERT INTO app_storage (id, content) VALUES (1, %s);",
+                        (json.dumps(initial_content),)
+                    )
+            conn.commit()
+        except Exception as e:
+            print(f"Error inicializando tabla en DB: {e}")
+        finally:
+            conn.close()
+
+init_db()
+
 def load_data():
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT content FROM app_storage WHERE id = 1;")
+                row = cur.fetchone()
+                if row:
+                    data = row[0]
+                    if isinstance(data, str):
+                        data = json.loads(data)
+                    if "cheats" not in data:
+                        data["cheats"] = []
+                    return data
+        except Exception as e:
+            print(f"Error leyendo de DB, recurriendo a archivo local: {e}")
+        finally:
+            conn.close()
+
     if not os.path.exists(DATA_FILE):
-        return {"users": {}, "tasks": [], "rewards": [], "task_logs": [], "redemptions": [], "cheats": []}
+        return {
+            "users": {}, 
+            "tasks": [
+                {"id": "t1", "name": "Tomar 2L de agua", "points": 1},
+                {"id": "t2", "name": "Ejercicio 30min", "points": 2},
+                {"id": "t3", "name": "Off line 30min", "points": 1},
+                {"id": "t4", "name": "Lectura 15min", "points": 1}
+            ], 
+            "rewards": [
+                {"id": "r1", "name": "Comida chatarra libre", "cost": 10},
+                {"id": "r2", "name": "Día de descanso total", "cost": 15}
+            ], 
+            "task_logs": [], 
+            "redemptions": [], 
+            "cheats": []
+        }
     with open(DATA_FILE, 'r', encoding='utf-8') as f:
         data = json.load(f)
         if "cheats" not in data:
@@ -19,8 +116,25 @@ def load_data():
         return data
 
 def save_data(data):
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    conn = get_db_connection()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE app_storage SET content = %s, updated_at = CURRENT_TIMESTAMP WHERE id = 1;",
+                    (json.dumps(data, ensure_ascii=False),)
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"Error guardando en PostgreSQL: {e}")
+        finally:
+            conn.close()
+
+    try:
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error guardando en archivo local: {e}")
 
 def calculate_consecutive_days(dates_list):
     if not dates_list:
@@ -48,7 +162,7 @@ def get_all_streaks(data, user_id):
     user_logs = [log for log in data['task_logs'] if log['user_id'] == user_id]
     
     task_streaks = {}
-    for task in data['tasks']:
+    for task in data.get('tasks', []):
         tid = task['id']
         t_dates = [log['date'] for log in user_logs if log.get('task_id') == tid]
         task_streaks[tid] = calculate_consecutive_days(t_dates)
@@ -66,15 +180,12 @@ def record_activity_and_check_violations(data, user_id, now):
     if not user:
         return
     
-    # Registrar última actividad
     user['last_active'] = now.isoformat()
     
-    # Comprobar si está violando su ventana de dormir actual
     sleep_str = user.get('sleep_time', '23:00')
     wake_str = user.get('wake_time', '07:00')
-    days_enabled = user.get('alarm_days', [0,1,2,3,4,5,6]) # 0=Lun, 6=Dom
+    days_enabled = user.get('alarm_days', [0,1,2,3,4,5,6])
     
-    # Si hoy aplica la alarma
     if now.weekday() in days_enabled:
         sh, sm = map(int, sleep_str.split(':'))
         wh, wm = map(int, wake_str.split(':'))
@@ -83,13 +194,11 @@ def record_activity_and_check_violations(data, user_id, now):
         offline_start = sleep_dt - timedelta(minutes=30)
         wake_dt = datetime.combine(now.date(), time(wh, wm))
         if wake_dt <= sleep_dt:
-            # Caso cruce de medianoche
             wake_dt += timedelta(days=1)
             if now < sleep_dt:
                 offline_start -= timedelta(days=1)
                 wake_dt -= timedelta(days=1)
 
-        # Si interactúa dentro del horario de desconexión
         if offline_start <= now <= wake_dt:
             date_key = now.strftime('%Y-%m-%d')
             cheat_key = f"{user_id}_{date_key}_offline_fail"
@@ -104,24 +213,20 @@ def verify_and_grant_offline_goal(data, user_id, now):
     today_str = now.strftime('%Y-%m-%d')
     days_enabled = user.get('alarm_days', [0,1,2,3,4,5,6])
     
-    # Solo procesar si el usuario tiene habilitado el día y ya pasó su hora de despertar
     wh, wm = map(int, user.get('wake_time', '07:00').split(':'))
     wake_today = datetime.combine(now.date(), time(wh, wm))
     
     if now < wake_today:
         return
 
-    # Verificar si falló anoche
     failed = f"{user_id}_{today_str}_offline_fail" in data['cheats']
     
-    # Verificar si ya tiene registrada la tarea 't3' (Off line 30min)
     already_done = any(
         log['user_id'] == user_id and log.get('task_id') == 't3' and log['date'] == today_str
         for log in data['task_logs']
     )
 
     if not failed and not already_done:
-        # Otorgar meta automáticamente
         task_points = 1
         user['balance'] += task_points
         data['task_logs'].append({
@@ -219,6 +324,26 @@ def update_alarm_settings():
         "alarm_enabled": user['alarm_enabled']
     }})
 
+@app.route('/api/update-target', methods=['POST'])
+def update_target():
+    payload = request.json
+    user_id = payload.get('user_id')
+    new_target = payload.get('target')
+
+    data = load_data()
+    if user_id not in data['users']:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    try:
+        val = int(new_target)
+        if val <= 0:
+            return jsonify({"error": "La meta debe ser mayor a 0"}), 400
+        data['users'][user_id]['target'] = val
+        save_data(data)
+        return jsonify({"success": True, "new_target": val})
+    except (ValueError, TypeError):
+        return jsonify({"error": "Valor no válido"}), 400
+
 @app.route('/api/update-profile', methods=['POST'])
 def update_profile():
     current_user_id = request.form.get('current_user_id', '').strip()
@@ -280,7 +405,6 @@ def get_state():
     if user_id not in data['users']:
         return jsonify({"error": "Usuario no encontrado"}), 404
 
-    # Registro de actividad y chequeo offline
     record_activity_and_check_violations(data, user_id, now)
     verify_and_grant_offline_goal(data, user_id, now)
     save_data(data)
@@ -324,8 +448,8 @@ def get_state():
 
     return jsonify({
         "user": safe_user,
-        "tasks": data['tasks'],
-        "rewards": data['rewards'],
+        "tasks": data.get('tasks', []),
+        "rewards": data.get('rewards', []),
         "completed_today": completed_today,
         "task_streaks": task_streaks,
         "active_days": active_days,
@@ -485,25 +609,6 @@ def get_leaderboard():
     leaderboard.sort(key=lambda x: x['score'], reverse=True)
 
     return jsonify(leaderboard)
-@app.route('/api/update-target', methods=['POST'])
-def update_target():
-    payload = request.json
-    user_id = payload.get('user_id')
-    new_target = payload.get('target')
-
-    data = load_data()
-    if user_id not in data['users']:
-        return jsonify({"error": "Usuario no encontrado"}), 404
-
-    try:
-        val = int(new_target)
-        if val <= 0:
-            return jsonify({"error": "La meta debe ser mayor a 0"}), 400
-        data['users'][user_id]['target'] = val
-        save_data(data)
-        return jsonify({"success": True, "new_target": val})
-    except (ValueError, TypeError):
-        return jsonify({"error": "Valor no válido"}), 400
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
